@@ -295,7 +295,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
                         help='Path to the input folder', **widget_dir)
     main_parser.add_argument('-o', '--output', metavar='/new/path', type=str, required=True,
                         help='Path to the output folder (where file will get copied over)', **widget_dir)
-    main_parser.add_argument('-ri', '--regex_input', metavar=r'(sub[^/\]*)/(*.*)', type=str, required=True,
+    main_parser.add_argument('-ri', '--regex_input', metavar=r'(sub[^/\]*)/(\d)', type=str, required=True,
                         help='Regex for input folder/files filter. Must be defined relatively from basepath (eg, do not prepend the path with /some/path).')
     main_parser.add_argument('-ro', '--regex_output', metavar=r'newsub/\1/\2', type=str, required=True,
                         help='Regex for output folder/files structure. Must be defined relatively from basepath.')

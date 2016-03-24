@@ -34,7 +34,7 @@ This is very useful to reorganize folders for experiments, where scripts/softwar
 Note that the paths are compared against filepaths, not just folders (but of course you can match folders, but remember when designing your regexp that it will compared against filepath).
 
 Note: use --gui (without any other argument) to launch the experimental gui (needs Gooey library).
-    
+
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -42,7 +42,7 @@ optional arguments:
                         Path to the input folder
   -o /new/path, --output /new/path
                         Path to the output folder (where file will get copied over)
-  -ri (sub[^/\]*)/(*.*), --regex_input (sub[^/\]*)/(*.*)
+  -ri (sub[^/\]*)/(*.*), --regex_input (sub[^/\]*)/(\d)
                         Regex for input folder/files filter. Must be defined relatively from basepath (eg, do not prepend the path with /some/path).
   -ro newsub/\1/\2, --regex_output newsub/\1/\2
                         Regex for output folder/files structure. Must be defined relatively from basepath.
