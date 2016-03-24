@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.7'
+__version__ = '0.8'
 
 import argparse
 import os
@@ -447,7 +447,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
         ptee.write("Warning: conflict type 1 (files already exist) has been detected. Please use --force if you want to overwrite them, else they will be skipped.\n")
     if conflict2_flag:
         ptee.write("Warning: conflict type 2 (collision) has been detected. If you continue, several files will have the same name due to the specified output regex (thus, some will be lost). You should cancel and check your regular expression for output.\n")
-    if not conflict1_flag and not conflig2_flag:
+    if not conflict1_flag and not conflict2_flag:
         ptee.write("No conflict detected. You are good to go!")
 
     # Ask user if we should apply
