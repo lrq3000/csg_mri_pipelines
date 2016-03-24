@@ -21,7 +21,7 @@ Runs on Python 2.7.11, but uses good standards to ensure easy conversion to Pyth
 
 ```
 usage: regex_path_reorganizer.py [-h] -i /some/path -o /new/path -ri
-                                 sub[^/\]*)/(*.* -ro newsub/\1/\2 [-y] [-f]
+                                 sub[^/\]*)/(\d) -ro newsub/\1/\2 [-y] [-f]
                                  [-s] [--show_fullpath] [--report REPORT]
                                  [-l /some/folder/filename.log] [-v]
                                  [--silent]
