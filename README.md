@@ -68,6 +68,6 @@ optional arguments:
 
 #### Optional
 
-* **tqdm** (for progress bar, **highly recommended**)
+* **[tqdm](https://github.com/tqdm/tqdm/)** (for progress bar, **highly recommended**)
 * scandir (for faster file walking and simulation report)
 * Gooey (for gui)
