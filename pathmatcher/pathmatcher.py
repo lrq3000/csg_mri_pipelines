@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# regex_path_reorganizer.py
+# pathmatcher.py
 # Copyright (C) 2016 Larroque Stephen
 #
 # Licensed under the MIT License (MIT)
@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.8'
+__version__ = '0.9'
 
 import argparse
 import os
@@ -258,7 +258,7 @@ def main(argv=None):
     #==== COMMANDLINE PARSER ====
 
     #== Commandline description
-    desc = '''Regex Path Reorganizer v%s
+    desc = '''Regex Path Matcher v%s
 Description: Copy files/folder from one path to a new path, with the wanted architecture, matched via regular expression.
 This app is essentially a path matcher using regexp, and it then rewrites the path using regexp, so that you can reuse elements from input path to build the output path.
 This is very useful to reorganize folders for experiments, where scripts/softwares expect a specific directories layout in order to work.
@@ -309,7 +309,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
                         help='Only simulate, print the list and stop.')
     main_parser.add_argument('--show_fullpath', action='store_true', required=False, default=False,
                         help='Show full paths instead of relative paths in the simulation.')
-    main_parser.add_argument('--report', type=str, required=False, default='regex_path_sim_report.txt',
+    main_parser.add_argument('--report', type=str, required=False, default='pathmatcher_report.txt',
                         help='Where to store the simulation report.')
     main_parser.add_argument('-l', '--log', metavar='/some/folder/filename.log', type=str, required=False,
                         help='Path to the log file. (Output will be piped to both the stdout and the log file)', **widget_filesave)
@@ -364,7 +364,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
         ptee.write(traceback.format_exc())
         return 1
 
-    ptee.write("== Regex Path Reorganizer started ==\n")
+    ptee.write("== Regex Path Matcher started ==\n")
     ptee.write("Parameters:")
     ptee.write("- Input: %s" % inputpath)
     ptee.write("- Output: %s" % outputpath)

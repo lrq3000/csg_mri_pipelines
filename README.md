@@ -7,15 +7,17 @@ All tools are licensed under MIT (but not necessarily the required/optional libr
 
 The rest of this document will describe each tool's purpose, usage and linked libraries.
 
-## Regex path reorganizer
+## Regex Path Matcheregex
 
 ### Description
 
-A file and folder hierarchy management tool with a regular expression matcher. Can display a simulation report and automatically detect conflicts (already existing files, collisions of multiple files copied to the same output filename because of regexp, etc.).
+A files and folders hierarchy management tool with a regular expression matcher. Can display a simulation report and automatically detect conflicts (already existing files, collisions of multiple files copied to the same output filename because of regexp, etc.). Can also be used as a Python module that returns the list of matched files and the transformations.
 
 If you often run experiments, you use scripts and applications, with some that you didn't design yourself. It might then happen that these apps/scripts expect a specific directory layout to work. Usually, you reorganize your files manually. Not only is this time consuming, this is also very error prone (eg, copying the wrong files to the wrong id).
 
 If you happen to know this situation, this tool might help you: just specify a regular expression matching the files you need, enter an output regular expression (that can reuse parts of the input files, for example your subjects ids, using regexp groups and recall), and then launch the program.
+
+This application can also be used as a Python module, so that you can include it in a pipeline to (semi-)automate repetitive stuff, like selecting the appropriate files to open in your favorite tool like SPM. For an exemple, see the script `reorient_pipeline` at the root of this repository.
 
 Runs on Python 2.7.11, but uses good standards to ensure easy conversion to Python 3 in case you really need it.
 
