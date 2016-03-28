@@ -34,7 +34,7 @@
 #
 # TODO:
 # * optimization: re.sub inputpath directly on list of all files in a folder?
-# * No recwalk so that can copy whole folder directly, quicker
+# * Modify recwalk to include regin and regout, and match directly all files in a folder and substitute. Also, stop if folder match and return it (to copy the whole folder directly instead of per file). See http://stackoverflow.com/questions/120656/directory-listing-in-python
 #
 
 from __future__ import print_function
@@ -68,6 +68,11 @@ except:
         if args:
             return args[0]
         return kwargs.get('iterable', None)
+
+try:
+    _str = basestring
+except NameError:
+    _str = str
 
 
 
@@ -403,7 +408,10 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
             if verbose or test_flag:
                 ptee.write("\rMatch: %s %s %s\n" % (relfilepath, "-->" if newfilepath else "", newfilepath if newfilepath else ""))
             if test_flag:
-                return 0
+                if return_report:
+                    return [[[relfilepath, newfilepath]], [None]]
+                else:
+                    return 0
     ptee.write("%i files matched." % len(files_list))
 
     # == SIMULATION REPORT STEP
