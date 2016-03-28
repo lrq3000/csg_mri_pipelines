@@ -249,7 +249,7 @@ def AutoGooey(fn):  # pragma: no cover
 
 
 @AutoGooey
-def main(argv=None):
+def main(argv=None, return_report=False):
     if argv is None: # if argv is empty, fetch from the commandline
         argv = sys.argv[1:]
     elif isinstance(argv, _str): # else if argv is supplied but it's a simple string, we need to parse it to a list of arguments before handing to argparse or any other argument parser
@@ -259,13 +259,14 @@ def main(argv=None):
 
     #== Commandline description
     desc = '''Regex Path Matcher v%s
-Description: Copy files/folder from one path to a new path, with the wanted architecture, matched via regular expression.
+Description: Match paths using regular expression, and then generate a report. Can also substitute using regex to generate output paths. A copy mode is also provided to allow the copy of files from input to output paths.
 This app is essentially a path matcher using regexp, and it then rewrites the path using regexp, so that you can reuse elements from input path to build the output path.
 This is very useful to reorganize folders for experiments, where scripts/softwares expect a specific directories layout in order to work.
 
-Note that the paths are compared against filepaths, not just folders (but of course you can match folders, but remember when designing your regexp that it will compared against filepath).
+Note that the paths are compared against filepaths, not just folders (but of course you can match folders with regex, but remember when designing your regexp that it will compared against files paths, not directories).
 
 Note: use --gui (without any other argument) to launch the experimental gui (needs Gooey library).
+Note2: can be used as a Python module to include in your scripts (set return_report=True).
     ''' % __version__
     ep = ''' '''
 
@@ -293,23 +294,27 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     # Required arguments
     main_parser.add_argument('-i', '--input', metavar='/some/path', type=str, required=True,
                         help='Path to the input folder', **widget_dir)
-    main_parser.add_argument('-o', '--output', metavar='/new/path', type=str, required=True,
-                        help='Path to the output folder (where file will get copied over)', **widget_dir)
-    main_parser.add_argument('-ri', '--regex_input', metavar=r'(sub[^/\]*)/(\d)', type=str, required=True,
-                        help='Regex for input folder/files filter. Must be defined relatively from basepath (eg, do not prepend the path with /some/path).')
-    main_parser.add_argument('-ro', '--regex_output', metavar=r'newsub/\1/\2', type=str, required=True,
-                        help='Regex for output folder/files structure. Must be defined relatively from basepath.')
+    main_parser.add_argument('-ri', '--regex_input', metavar=r'sub[^/\]*/(\d+)', type=str, required=True,
+                        help='Regex to match input paths. Must be defined relatively from --input folder.')
+
+    # Optional output/copy mode
+    main_parser.add_argument('-o', '--output', metavar='/new/path', type=str, required=False, default=None,
+                        help='Path to the output folder (where file will get copied over if --copy)', **widget_dir)
+    main_parser.add_argument('-ro', '--regex_output', metavar=r'newsub/\1', type=str, required=False, default=None,
+                        help='Regex to substitute input paths to convert to output paths. Must be defined relatively from --output folder. If not provided but --output is specified, will keep the same directory layout as input (useful to extract specific files without changing layout).')
+    main_parser.add_argument('-c', '--copy', action='store_true', required=False, default=False,
+                        help='Copy the matched input paths to the regex-substituted output paths.')
 
     # Optional general arguments
+    main_parser.add_argument('-t', '--test', action='store_true', required=False, default=False,
+                        help='Regex test mode: Stop after the first matched file and show the result of substitution. Useful to quickly check if the regex patterns are ok.')
     main_parser.add_argument('-y', '--yes', action='store_true', required=False, default=False,
                         help='Automatically accept the simulation and apply changes (good for batch processing and command chaining).')
     main_parser.add_argument('-f', '--force', action='store_true', required=False, default=False,
                         help='Force overwriting the target path already exists. Note that by default, if a file already exist, without this option, it won\'t get overwritten and no message will be displayed.')
-    main_parser.add_argument('-s', '--simulate', action='store_true', required=False, default=False,
-                        help='Only simulate, print the list and stop.')
     main_parser.add_argument('--show_fullpath', action='store_true', required=False, default=False,
                         help='Show full paths instead of relative paths in the simulation.')
-    main_parser.add_argument('--report', type=str, required=False, default='pathmatcher_report.txt',
+    main_parser.add_argument('--report', type=str, required=False, default='pathmatcher_report.txt', metavar='pathmatcher_report.txt',
                         help='Where to store the simulation report.')
     main_parser.add_argument('-l', '--log', metavar='/some/folder/filename.log', type=str, required=False,
                         help='Path to the log file. (Output will be piped to both the stdout and the log file)', **widget_filesave)
@@ -325,11 +330,12 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     #-- Set variables from arguments
     inputpath = fullpath(args.input)
     rootfolderpath = inputpath
-    outputpath = fullpath(args.output)
+    outputpath = fullpath(args.output) if args.output else None
     rootoutpath = outputpath
     regex_input = args.regex_input
     regex_output = args.regex_output
-    simulate = args.simulate
+    copy_mode = args.copy
+    test_flag = args.test
     yes_flag = args.yes
     force = args.force
     only_missing = not force
@@ -341,11 +347,14 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     # -- Sanity checks
     if os.path.isfile(inputpath): # if inputpath is a single file (instead of a folder), then define the rootfolderpath as the parent directory (for correct relative path generation, else it will also truncate the filename!)
         rootfolderpath = os.path.dirname(inputpath)
-    if os.path.isfile(outputpath): # if inputpath is a single file (instead of a folder), then define the rootfolderpath as the parent directory (for correct relative path generation, else it will also truncate the filename!)
+    if outputpath and os.path.isfile(outputpath): # if inputpath is a single file (instead of a folder), then define the rootfolderpath as the parent directory (for correct relative path generation, else it will also truncate the filename!)
         rootoutpath = os.path.dirname(outputpath)
 
     if not os.path.isdir(rootfolderpath):
         raise NameError('Specified input path does not exist. Please check the specified path')
+
+    if copy_mode and not outputpath:
+        raise ValueError('--copy specified but no --output !')
 
     # -- Configure the log file if enabled (ptee.write() will write to both stdout/console and to the log file)
     if args.log:
@@ -355,10 +364,11 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     else:
         ptee = Tee(nostdout=silent)
 
-    #== Main program
+    #### Main program
+    # Test if regular expressions are correct syntactically
     try:
         regin = re.compile(str_to_raw(regex_input))
-        regout = re.compile(str_to_raw(regex_output))
+        regout = re.compile(str_to_raw(regex_output)) if regex_output else None
     except re.error as exc:
         ptee.write("Regular expression is not correct, please fix it! Here is the error stack:\n")
         ptee.write(traceback.format_exc())
@@ -366,15 +376,15 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
 
     ptee.write("== Regex Path Matcher started ==\n")
     ptee.write("Parameters:")
-    ptee.write("- Input: %s" % inputpath)
-    ptee.write("- Output: %s" % outputpath)
-    ptee.write("- Regex input: %s" % regex_input)
-    ptee.write("- Regex output: %s" % regex_output)
+    ptee.write("- Input root: %s" % inputpath)
+    ptee.write("- Input regex: %s" % regex_input)
+    ptee.write("- Output root: %s" % outputpath)
+    ptee.write("- Output regex: %s" % regex_output)
     ptee.write("\n")
 
-    # == SIMULATION STEP
+    # == FILES WALKING AND MATCHING/SUBSTITUTION STEP
     files_list = []  # "to copy" files list, stores the list of input files and their corresponding output path (computed using regex)
-    ptee.write("Calculating paths restructuration and simulation report, please wait (total time depends on how many files you have, filesize has no influence)...")
+    ptee.write("Computing paths matching and simulation report, please wait (total time depends on files count - filesize has no influence). Press CTRL+C to abort\n")
     for dirpath, filename in tqdm(recwalk(inputpath), unit='files', leave=True, smoothing=0):
         # Get full absolute filepath and relative filepath from base dir
         filepath = os.path.join(dirpath, filename)
@@ -382,14 +392,22 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
         # Check if relative filepath matches the input regex
         if regin.match(relfilepath):  # Matched! We store it in the "to copy" files list
             # Compute the output filepath using output regex
-            newfilepath = regin.sub(regex_output, relfilepath)
-            fulloutpath = os.path.join(rootoutpath, newfilepath)
+            if outputpath:
+                newfilepath = regin.sub(regex_output, relfilepath) if regex_output else relfilepath
+                fulloutpath = os.path.join(rootoutpath, newfilepath)
+            else:
+                newfilepath = None
+                fulloutpath = None
             # Store both paths into the "to copy" list
             files_list.append([filepath, fulloutpath])
-            if verbose and not silent: ptee.write("Match: %s --> %s" % (relfilepath, newfilepath))
+            if verbose or test_flag:
+                ptee.write("\rMatch: %s %s %s\n" % (relfilepath, "-->" if newfilepath else "", newfilepath if newfilepath else ""))
+            if test_flag:
+                return 0
+    ptee.write("%i files matched." % len(files_list))
 
-    # End of simulation, show result and ask user if s/he wants to apply
-    ptee.write("Preparing simulation report, please wait...")
+    # == SIMULATION REPORT STEP
+    ptee.write("Preparing simulation report, please wait a few seconds...")
 
     # Initialize conflicts global flags
     conflict1_flag = False
@@ -406,65 +424,79 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
 
     # Build and show simulation report in user's default text editor
     with open(reportpath, 'w') as reportfile:
-        reportfile.write("== SIMULATION OF REORGANIZATION ==\n")
+        reportfile.write("== REGEX PATH MATCHER SIMULATION REPORT ==\n")
         reportfile.write("Total number of files matched: %i\n" % len(files_list))
+        reportfile.write("Parameters:\n")
+        reportfile.write("- Input root: %s\n" % inputpath)
+        reportfile.write("- Input regex: %s\n" % regex_input)
+        reportfile.write("- Output root: %s\n" % outputpath)
+        reportfile.write("- Output regex: %s\n" % regex_output)
         reportfile.write("\n")
+        reportfile.write("List of matched files:\n")
         for file_op in files_list:
-            # Check if there was a conflict:
-            # Type 1 - already existing output file)
-            fulloutpath = os.path.join(rootoutpath, file_op[1])
             conflict1 = False
-            if os.path.exists(fulloutpath):
-                conflict1 = True
-                conflict1_flag = True
-
-            # 2- two files will be created with same output name
             conflict2 = False
-            if outdict[file_op[1]] > 1:
-                conflict2 = True
-                conflict2_flag = True
+            if outputpath:
+                # Check if there was a conflict:
+                # Type 1 - already existing output file (force overwrite?)
+                fulloutpath = os.path.join(rootoutpath, file_op[1])
+                if os.path.exists(fulloutpath):
+                    conflict1 = True
+                    conflict1_flag = True
+
+                # Type 2 - two files will output with same name (bad regex)
+                if outdict[file_op[1]] > 1:
+                    conflict2 = True
+                    conflict2_flag = True
 
             # Show relative or absolute paths?
             if show_fullpath:
                 showinpath = file_op[0]
-                showoutpath = file_op[1]
+                showoutpath = file_op[1] if outputpath else None
             else:
                 showinpath = path2unix(os.path.relpath(file_op[0], rootfolderpath))
-                showoutpath = path2unix(os.path.relpath(file_op[1], rootoutpath))
+                showoutpath = path2unix(os.path.relpath(file_op[1], rootoutpath)) if outputpath else None
 
             # Write into report file
-            reportfile.write("* %s --> %s %s %s" % (showinpath, showoutpath, "[ALREADY_EXIST]" if conflict1 else '', "[CONFLICT]" if conflict2 else ''))
+            reportfile.write("* %s %s %s %s %s" % (showinpath, "-->" if outputpath else "", showoutpath if outputpath else "", "[ALREADY_EXIST]" if conflict1 else '', "[CONFLICT]" if conflict2 else ''))
             reportfile.write("\n")
     # Open the simulation report with the system's default text editor
-    if not yes_flag:  # if --yes is supplied, just skip question and apply!
+    if not (yes_flag or return_report):  # if --yes is supplied, just skip question and apply!
         ptee.write("Opening simulation report with your default editor, a new window should open.")
         open_with_default_app(reportpath)
 
-    # == USER NOTIFICATION AND VALIDATION
-    # Notify user of conflicts
-    ptee.write("\n")
-    if conflict1_flag:
-        ptee.write("Warning: conflict type 1 (files already exist) has been detected. Please use --force if you want to overwrite them, else they will be skipped.\n")
-    if conflict2_flag:
-        ptee.write("Warning: conflict type 2 (collision) has been detected. If you continue, several files will have the same name due to the specified output regex (thus, some will be lost). You should cancel and check your regular expression for output.\n")
-    if not conflict1_flag and not conflict2_flag:
-        ptee.write("No conflict detected. You are good to go!")
+    # == COPY STEP
+    if copy_mode and outputpath and files_list:
+        # -- USER NOTIFICATION AND VALIDATION
+        # Notify user of conflicts
+        ptee.write("\n")
+        if conflict1_flag:
+            ptee.write("Warning: conflict type 1 (files already exist) has been detected. Please use --force if you want to overwrite them, else they will be skipped.\n")
+        if conflict2_flag:
+            ptee.write("Warning: conflict type 2 (collision) has been detected. If you continue, several files will have the same name due to the specified output regex (thus, some will be lost). You should cancel and check your regular expression for output.\n")
+        if not conflict1_flag and not conflict2_flag:
+            ptee.write("No conflict detected. You are good to go!")
 
-    # Ask user if we should apply
-    if not yes_flag:  # if --yes is supplied, just skip question and apply!
-        applycopy = raw_input("Do you want to apply the result of the path reorganization simulation on %i files? [Y/N]: " % len(files_list))
-        if applycopy.lower() != 'y':
-            return 0
+        # Ask user if we should apply
+        if not (yes_flag or return_report):  # if --yes is supplied, just skip question and apply!
+            applycopy = raw_input("Do you want to apply the result of the path reorganization simulation on %i files? [Y/N]: " % len(files_list))
+            if applycopy.lower() != 'y':
+                return 0
 
-    # == APPLY STEP
-    ptee.write("Applying new path structure, please wait (total time depends on file sizes and matches count)...")
-    for infilepath, outfilepath in tqdm(files_list, total=len(files_list), unit='files', leave=True):
-        if verbose and not silent: ptee.write("%s --> %s" % (infilepath, outfilepath))
-        # Copy the file! (User previously accepted to apply the simulation)
-        copy_any(infilepath, outfilepath, only_missing=only_missing)
+        # -- APPLY STEP
+        ptee.write("Applying new path structure, please wait (total time depends on file sizes and matches count). Press CTRL+C to abort")
+        for infilepath, outfilepath in tqdm(files_list, total=len(files_list), unit='files', leave=True):
+            if verbose:
+                ptee.write("%s --> %s" % (infilepath, outfilepath))
+            # Copy the file! (User previously accepted to apply the simulation)
+            copy_any(infilepath, outfilepath, only_missing=only_missing)
 
-    # End of main function
-    return 0
+    # == RETURN AND END OF MAIN
+    ptee.write("Task done, quitting.")
+    if return_report:  # return the matched files and their substitutions if available
+        return files_list, [conflict1_flag, conflict2_flag]
+    else:  # Just return non error code
+        return 0
 
 # Calling main function if the script is directly called (not imported as a library in another program)
 if __name__ == "__main__":  # pragma: no cover
