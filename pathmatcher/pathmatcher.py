@@ -152,6 +152,8 @@ def recwalk(inputpath, sorting=True):
 def path2unix(path, nojoin=False, fromwinpath=False):
     '''From a path given in any format, converts to posix path format
     fromwinpath=True forces the input path to be recognized as a Windows path (useful on Unix machines to unit test Windows paths)'''
+    if not path:
+        return path
     if fromwinpath:
         pathparts = list(PureWindowsPath(path).parts)
     else:
@@ -399,20 +401,21 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
             # Compute the output filepath using output regex
             if outputpath:
                 newfilepath = regin.sub(regex_output, relfilepath) if regex_output else relfilepath
-                fulloutpath = os.path.join(rootoutpath, newfilepath)
+                #fulloutpath = os.path.join(rootoutpath, newfilepath)
             else:
                 newfilepath = None
-                fulloutpath = None
+                #fulloutpath = None
             # Store both paths into the "to copy" list
-            files_list.append([filepath, fulloutpath])
-            if verbose or test_flag:
+            files_list.append([relfilepath, newfilepath])
+            if verbose or test_flag:  # Regex test mode or verbose: print the match
                 ptee.write("\rMatch: %s %s %s\n" % (relfilepath, "-->" if newfilepath else "", newfilepath if newfilepath else ""))
+            # Regex test mode: just quit after the first match
             if test_flag:
                 if return_report:
-                    return [[[relfilepath, newfilepath]], [None]]
+                    return files_list, None
                 else:
                     return 0
-    ptee.write("%i files matched." % len(files_list))
+    ptee.write("End of simulation. %i files matched." % len(files_list))
 
     # == SIMULATION REPORT STEP
     ptee.write("Preparing simulation report, please wait a few seconds...")
@@ -459,11 +462,11 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
 
             # Show relative or absolute paths?
             if show_fullpath:
+                showinpath = os.path.join(rootfolderpath, file_op[0])
+                showoutpath = os.path.join(rootoutpath, file_op[1]) if outputpath else None
+            else:
                 showinpath = file_op[0]
                 showoutpath = file_op[1] if outputpath else None
-            else:
-                showinpath = path2unix(os.path.relpath(file_op[0], rootfolderpath))
-                showoutpath = path2unix(os.path.relpath(file_op[1], rootoutpath)) if outputpath else None
 
             # Write into report file
             reportfile.write("* %s %s %s %s %s" % (showinpath, "-->" if outputpath else "", showoutpath if outputpath else "", "[ALREADY_EXIST]" if conflict1 else '', "[CONFLICT]" if conflict2 else ''))
@@ -497,7 +500,7 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
             if verbose:
                 ptee.write("%s --> %s" % (infilepath, outfilepath))
             # Copy the file! (User previously accepted to apply the simulation)
-            copy_any(infilepath, outfilepath, only_missing=only_missing)
+            copy_any(os.path.join(rootfolderpath, infilepath), os.path.join(rootoutpath, outfilepath), only_missing=only_missing)
 
     # == RETURN AND END OF MAIN
     ptee.write("Task done, quitting.")
