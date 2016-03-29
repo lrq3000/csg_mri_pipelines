@@ -236,6 +236,7 @@ Note: you need to `pip install mlab` before using this script.
 
     # == Prepare list of conditions and string template vars
     conditions_list = next(os.walk(rootfolderpath))[1]
+    conditions_list.sort()  # Make sure the folders order is the same every time we launch the application, in order for the user to be able to restart and skip steps and still work on the same files
     template_vars = {'inputpath': rootfolderpath,
                                     'firstcond': conditions_list[0],
                                     }
@@ -283,7 +284,7 @@ Note: you need to `pip install mlab` before using this script.
     print("Multiple anatomical images will be displayed side by side as a sanity check of correct reorientation. Please check that they are all reoriented correctly.")
     if ask_step():  # Wait for user to be ready
         for files in tqdm(grouper(checkreg_display_count, files_list), total=int(len(files_list)/6), leave=True, unit='files'):
-            if verbose: print("- Processing file: %s" % file)
+            if verbose: print("- Processing files: %s" % repr(files))
             if not ask_next(): break  # ask for use to load the next file? Becaus else, the bridge does not wait and loads all files one after the other
             matlab.spm_check_registration(*files)
 
