@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.1'
+__version__ = '0.3'
 
 import argparse
 import os
@@ -234,12 +234,15 @@ Note: you need to `pip install mlab` before using this script.
                                     }
 
     # == IMPORT MLAB (LOAD MATLAB BRIDGE)
+    print("Launching MATLAB, please wait a few seconds...")
+    os.chdir(rootfolderpath)  # Change Python current directory before launching MATLAB, this will change the initial dir of MATLAB
     try:
         from mlab.releases import latest_release
         import matlab
     except ImportError as exc:
         print("You need to install https://github.com/ewiger/mlab to use this script!")
         raise(exc)
+    #matlab.cd(rootfolderpath)  # DOES NOT WORK: Change MATLAB's current dir to root of project's folder, will be easier for user to load other images if needed
 
     # == Files walking
     print("Please wait while the directories are scanned to find anatomical images...")
@@ -264,7 +267,9 @@ Note: you need to `pip install mlab` before using this script.
         for file in tqdm(files_list, leave=True, unit='files'):
             if verbose: print("- Processing file: %s" % file)
             if not ask_next(file): break  # ask for use to load the next file? Becaus else, the bridge does not wait and loads all files one after the other
-            matlab.spm_image(file)
+            #matlab.cd(os.path.dirname(file))  # FIXME: does not work...
+            os.chdir(os.path.dirname(file))  # Workaround: Change Python and MATLAB's path to the folder where the anatomical file is, so that user just needs to click on it
+            matlab.spm_image('display')  # FIXME: matlab.spm_image('display', file) should open the file directly, but it does not with current version of mlab... String is too long!
 
     # == CHECK MULTIPLE IMAGES TOGETHER
     print("\n=> STEP3: CHECK MULTIPLE IMAGES TOGETHER")
@@ -281,6 +286,7 @@ Note: you need to `pip install mlab` before using this script.
     if ask_step():  # Wait for user to be ready
         for condition in conditions_list[1:]:  # skip first condition, this is where we will copy the anatomical images from, to the other conditions
             template_vars["tocond"] = condition
+            os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
             pathmatcher.main(r' -i "{inputpath}" -ri "{firstcond}/(\d+)/data/mprage/" -o "{inputpath}" -ro "{tocond}/\1/data/mprage/" --copy --force --yes --silent '.format(**template_vars), True)
 
     # == REGISTRATION
@@ -290,6 +296,7 @@ Note: you need to `pip install mlab` before using this script.
 
     if ask_step():  # Wait for user to be ready
         # -- Walk files and detect all anatomical and functional images (based on directories layout)
+        os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
         images_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "([^\\/]+)/(\d+)/data/(mprage|rest)/[^\.]+\.(img|nii)" --silent '.format(**template_vars), True)
         images_list = [file[0] for file in images_list]  # extract only the input match, there's no output anyway
 
