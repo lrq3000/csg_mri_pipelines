@@ -295,7 +295,7 @@ Note: you need to `pip install mlab` before using this script.
         for condition in conditions_list[1:]:  # skip first condition, this is where we will copy the anatomical images from, to the other conditions
             template_vars["tocond"] = condition
             os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
-            pathmatcher.main(r' -i "{inputpath}" -ri "{firstcond}/(\d+)/data/mprage/" -o "{inputpath}" -ro "{tocond}/\1/data/mprage/" --copy --force --yes --silent '.format(**template_vars), True)
+            pathmatcher.main(r' -i "{inputpath}/{firstcond}" -ri "(\d+)/data/mprage/" -o "{inputpath}/{tocond}" -ro "\1/data/mprage/" --copy --force --yes --silent '.format(**template_vars), True)
 
     # == REGISTRATION
     print("\n=> STEP5: REGISTRATION OF FUNCTIONAL IMAGES")
