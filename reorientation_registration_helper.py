@@ -361,6 +361,7 @@ Note: you need to `pip install mlab` before using this script.
 
     # == END: now user must execute the standard preprocessing script
     print("\nAll done. You should now use the standard preprocessing script. Quitting.")
+    _ = raw_input("Press any key to quit.")  # IMPORTANT: if we don't wait, the last task will be closed because the program is closing!
 
     return 0
 
