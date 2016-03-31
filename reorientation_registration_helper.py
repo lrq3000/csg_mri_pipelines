@@ -47,6 +47,7 @@ import shutil
 import sys
 import traceback
 
+from collections import OrderedDict
 from itertools import izip_longest, product
 from pathmatcher import pathmatcher
 
@@ -309,7 +310,7 @@ Note: you need to `pip install mlab` before using this script.
         images_list = [file[0] for file in images_list]  # extract only the input match, there's no output anyway
 
         # -- Precomputing to pair together anatomical images and functional images of the same patient for the same condition
-        im_table = {}  # images lookup table, organized by condition type, then id, then type of imagery (anatomical or functional)
+        im_table = OrderedDict()  # images lookup table, organized by condition type, then id, then type of imagery (anatomical or functional)
         RE_images = re.compile(r'([^\\/]+)/(\d+)/data/(mprage|rest)/')
         for file in images_list:
             # Match the regex on each file path, to detect the condition, subject id and type of imagery
@@ -319,18 +320,26 @@ Note: you need to `pip install mlab` before using this script.
             cond, id, im_type = m.group(1), m.group(2), m.group(3)
             # Create entry if does not exist
             if cond not in im_table:
-                im_table[cond] = {}
+                im_table[cond] = OrderedDict()  # always use an OrderedDict so that we walk the subjects id by the same order every time we launch the program (allows to skip already processed subjects)
             if id not in im_table[cond]:
-                im_table[cond][id] = {}
+                im_table[cond][id] = OrderedDict()
             if im_type not in im_table[cond][id]:
                 im_table[cond][id][im_type] = []
 
             # Append file path to the table at its correct place
             im_table[cond][id][im_type].append(file)
 
+        # Precompute total number of elements user will have to process (to show progress bar)
+        total_images_step5 = 0
+        for cond in im_table:
+            for id in im_table[cond]:
+                total_images_step5 += 1
+
         # -- Processing to MATLAB checkreg
+        current_image_step5 = 0
         for cond in im_table:  # for each condition
-            for id in im_table[cond]:  # for each subject id in each condition
+            for id in tqdm(im_table[cond], total=total_images_step5, initial=current_image_step5, leave=True, unit='subjects'):  # for each subject id in each condition
+                current_image_step5 += 1
                 # Randomly choose one anatomical image (there should be only one anyway) and one functional image
                 im_anat = random.choice(im_table[cond][id]['mprage'])
                 im_func = random.choice(im_table[cond][id]['rest'])
