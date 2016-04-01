@@ -397,7 +397,7 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
         filepath = os.path.join(dirpath, filename)
         relfilepath = path2unix(os.path.relpath(filepath, rootfolderpath)) # File relative path from the root (we truncate the rootfolderpath so that we can easily check the files later even if the absolute path is different)
         # Check if relative filepath matches the input regex
-        if regin.match(relfilepath):  # Matched! We store it in the "to copy" files list
+        if regin.search(relfilepath):  # Matched! We store it in the "to copy" files list
             # Compute the output filepath using output regex
             if outputpath:
                 newfilepath = regin.sub(regex_output, relfilepath) if regex_output else relfilepath
@@ -409,13 +409,15 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
             files_list.append([relfilepath, newfilepath])
             if verbose or test_flag:  # Regex test mode or verbose: print the match
                 ptee.write("\rMatch: %s %s %s\n" % (relfilepath, "-->" if newfilepath else "", newfilepath if newfilepath else ""))
-            # Regex test mode: just quit after the first match
-            if test_flag:
-                if return_report:
-                    return files_list, None
-                else:
-                    return 0
+                if test_flag:  # Regex test mode: break file walking after the first match
+                    break
     ptee.write("End of simulation. %i files matched." % len(files_list))
+    # Regex test mode: just quit after the first match
+    if test_flag:
+        if return_report:
+            return files_list, None
+        else:
+            return 0
 
     # == SIMULATION REPORT STEP
     ptee.write("Preparing simulation report, please wait a few seconds...")
