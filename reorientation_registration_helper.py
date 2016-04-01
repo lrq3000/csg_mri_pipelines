@@ -255,9 +255,10 @@ Note: you need to `pip install mlab` before using this script.
 
     # == Files walking
     print("Please wait while the directories are scanned to find anatomical images...")
-    files_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "{firstcond}/(\d+)/data/mprage/[^\.]+\.(img|nii)" --silent '.format(**template_vars), True)
+    files_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "([^\/]+)/data/mprage/[^\.]+\.(img|nii)" --silent '.format(**template_vars), True)
     files_list = [file[0] for file in files_list]  # extract only the input match, there's no output anyway
     files_list = [os.path.join(rootfolderpath, file) for file in files_list]  # calculate full absolute path instead of relative (since we need to pass them to MATLAB)
+    print("Found %i anatomical images." % len(files_list))
 
     # == SPM_AUTO_REORIENT
     # Get the list of anatomical images
@@ -290,13 +291,14 @@ Note: you need to `pip install mlab` before using this script.
             matlab.spm_check_registration(*files)
 
     # == COPY ANATOMICAL TO OTHER CONDITIONS
-    print("\n=> STEP4: COPYING ANATOMICAL IMAGES")
-    print("Anatomical images will now be copied onto other conditions, please wait a few minutes...")
-    if ask_step():  # Wait for user to be ready
-        for condition in conditions_list[1:]:  # skip first condition, this is where we will copy the anatomical images from, to the other conditions
-            template_vars["tocond"] = condition
-            os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
-            pathmatcher.main(r' -i "{inputpath}/{firstcond}" -ri "(\d+)/data/mprage/" -o "{inputpath}/{tocond}" -ro "\1/data/mprage/" --copy --force --yes --silent '.format(**template_vars), True)
+    print("\n=> STEP4: Skipped...")
+    # print("\n=> STEP4: COPYING ANATOMICAL IMAGES")
+    # print("Anatomical images will now be copied onto other conditions, please wait a few minutes...")
+    # if ask_step():  # Wait for user to be ready
+        # for condition in conditions_list[1:]:  # skip first condition, this is where we will copy the anatomical images from, to the other conditions
+            # template_vars["tocond"] = condition
+            # os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
+            # pathmatcher.main(r' -i "{inputpath}/{firstcond}" -ri "([^\/]+)/data/mprage/" -o "{inputpath}/{tocond}" -ro "\1/data/mprage/" --copy --force --yes --silent '.format(**template_vars), True)
 
     # == REGISTRATION
     print("\n=> STEP5: REGISTRATION OF FUNCTIONAL IMAGES")
@@ -306,12 +308,12 @@ Note: you need to `pip install mlab` before using this script.
     if ask_step():  # Wait for user to be ready
         # -- Walk files and detect all anatomical and functional images (based on directories layout)
         os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
-        images_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "([^\\/]+)/(\d+)/data/(mprage|rest)/[^\.]+\.(img|nii)" --silent '.format(**template_vars), True)
+        images_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "([^\\/]+)/([^\/]+)/data/(mprage|rest)/[^\.]+\.(img|nii)" --silent '.format(**template_vars), True)
         images_list = [file[0] for file in images_list]  # extract only the input match, there's no output anyway
 
         # -- Precomputing to pair together anatomical images and functional images of the same patient for the same condition
         im_table = OrderedDict()  # images lookup table, organized by condition type, then id, then type of imagery (anatomical or functional)
-        RE_images = re.compile(r'([^\\/]+)/(\d+)/data/(mprage|rest)/')
+        RE_images = re.compile(r'([^\\/]+)/([^\/]+)/data/(mprage|rest)/')
         for file in images_list:
             # Match the regex on each file path, to detect the condition, subject id and type of imagery
             m = RE_images.match(file)
