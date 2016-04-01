@@ -311,6 +311,8 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
                         help='Regex to substitute input paths to convert to output paths. Must be defined relatively from --output folder. If not provided but --output is specified, will keep the same directory layout as input (useful to extract specific files without changing layout).')
     main_parser.add_argument('-c', '--copy', action='store_true', required=False, default=False,
                         help='Copy the matched input paths to the regex-substituted output paths.')
+    main_parser.add_argument('-m', '--move', action='store_true', required=False, default=False,
+                        help='Move the matched input paths to the regex-substituted output paths.')
 
     # Optional general arguments
     main_parser.add_argument('-t', '--test', action='store_true', required=False, default=False,
@@ -342,6 +344,7 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
     regex_input = args.regex_input
     regex_output = args.regex_output
     copy_mode = args.copy
+    move_mode = args.move
     test_flag = args.test
     yes_flag = args.yes
     force = args.force
@@ -360,7 +363,7 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
     if not os.path.isdir(rootfolderpath):
         raise NameError('Specified input path does not exist. Please check the specified path')
 
-    if copy_mode and not outputpath:
+    if (copy_mode or move_mode) and not outputpath:
         raise ValueError('--copy specified but no --output !')
 
     # -- Configure the log file if enabled (ptee.write() will write to both stdout/console and to the log file)
@@ -478,8 +481,8 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
         ptee.write("Opening simulation report with your default editor, a new window should open.")
         open_with_default_app(reportpath)
 
-    # == COPY STEP
-    if copy_mode and outputpath and files_list:
+    # == COPY/MOVE STEP
+    if (copy_mode or move_mode) and outputpath and files_list:
         # -- USER NOTIFICATION AND VALIDATION
         # Notify user of conflicts
         ptee.write("\n")
@@ -502,7 +505,11 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
             if verbose:
                 ptee.write("%s --> %s" % (infilepath, outfilepath))
             # Copy the file! (User previously accepted to apply the simulation)
-            copy_any(os.path.join(rootfolderpath, infilepath), os.path.join(rootoutpath, outfilepath), only_missing=only_missing)
+            fullinpath = os.path.join(rootfolderpath, infilepath)
+            fulloutpath = os.path.join(rootoutpath, outfilepath)
+            copy_any(fullinpath, fulloutpath, only_missing=only_missing)  # copy file
+            if move_mode:  # if move mode, then delete the old file. Copy/delete is safer than move because we can ensure that the file is fully copied (metadata/stats included) before deleting the old
+                remove_if_exist(fullinpath)
 
     # == RETURN AND END OF MAIN
     ptee.write("Task done, quitting.")
