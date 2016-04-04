@@ -86,7 +86,7 @@ def ask_step():
         else:
             print("Incorrect entry. Please type one of the proposed choices.")
 
-def ask_next(filepath='', msg=None):
+def ask_next(filepath='', msg=None, customchoices=[]):
     '''Ask to user if s/he is ready to process next file'''
     if not msg:
         msg = "\nLoad next file %s? [C]ontinue (default), [S]kip to next step, [N]ext file, [A]bort: " % filepath
@@ -101,6 +101,8 @@ def ask_next(filepath='', msg=None):
             return False
         elif len(user_choice) == 0 or user_choice.lower() == 'c':
             return True
+        elif user_choice.lower() in customchoices:
+            return user_choice.lower()
         else:
             print("Incorrect entry. Please type one of the proposed choices.")
 
@@ -296,11 +298,15 @@ Note: you need to `pip install mlab` before using this script.
 
     # == CHECK MULTIPLE IMAGES TOGETHER
     print("\n=> STEP3: CHECK MULTIPLE IMAGES TOGETHER")
-    print("Multiple anatomical images will be displayed side by side as a sanity check of correct reorientation. Please check that they are all reoriented correctly.")
+    print("Multiple anatomical images will be displayed side by side as a sanity check of correct reorientation. Please check that they are all reoriented correctly (check ventricles, skull boundaries when sliding cursor to the edges, random points in images).")
     if ask_step():  # Wait for user to be ready
-        for files in tqdm(grouper(checkreg_display_count, files_list), total=int(len(files_list)/6), leave=True, unit='files'):
+        imgs_pack_by = 6
+        for files in tqdm(grouper(checkreg_display_count, files_list), total=int(len(files_list)/imgs_pack_by), leave=True, unit='files'):
+            files = [f for f in files if f is not None]  # remove None filler files in case the remaining files are fewer than the number we want to show
+            if len(files) < imgs_pack_by:  # if we have less remaining files than what we want to compare, let's sample randomly more pictures from the original files list
+                files.extend([random.choice(files_list) for _ in range(imgs_pack_by - len(files))])
             if verbose: print("- Processing files: %s" % repr(files))
-            uchoice = ask_next(file)  # ask user if we load the next file?
+            uchoice = ask_next()  # ask user if we load the next file?
             if uchoice is None: break
             if uchoice == False: continue
             matlab.spm_check_registration(*files)
@@ -365,7 +371,7 @@ Note: you need to `pip install mlab` before using this script.
                 im_anat = os.path.join(rootfolderpath, im_anat)
                 im_func = os.path.join(rootfolderpath, im_func)
                 # Wait for user to be ready
-                uchoice = ask_next(msg='Open next registration for condition %s, subject id %s? Enter to continue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (cond, id))  # ask user if we load the next file?
+                uchoice = ask_next(msg='Open next registration for condition %s, subject id %s? Enter to [c]ontinue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (cond, id))  # ask user if we load the next file?
                 if uchoice is None: break
                 if uchoice == False: continue
                 # Send to MATLAB checkreg!
