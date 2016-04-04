@@ -85,10 +85,12 @@ def ask_step():
 
 def ask_next(filepath=''):
     '''Ask to user if s/he is ready to process next file'''
-    user_choice = raw_input("\nLoad next file %s? [C]ontinue (default), [S]kip and go to next step, [A]bort: " % filepath)
+    user_choice = raw_input("\nLoad next file %s? [C]ontinue (default), [S]kip to next step, [N]ext file, [A]bort: " % filepath)
     if user_choice.lower() == 'a':
         sys.exit(0)
     elif user_choice.lower() == 's':
+        return None
+    elif user_choice.lower() == 'n':
         return False
     else:
         return True
@@ -276,7 +278,9 @@ Note: you need to `pip install mlab` before using this script.
     if ask_step():  # Wait for user to be ready
         for file in tqdm(files_list, leave=True, unit='files'):
             if verbose: print("- Processing file: %s" % file)
-            if not ask_next(file): break  # ask for use to load the next file? Becaus else, the bridge does not wait and loads all files one after the other
+            uchoice = ask_next(file)  # ask user if we load the next file? If not, we don't have to load the bridge and file, can just skip
+            if uchoice is None: break
+            if uchoice == False: continue
             #matlab.cd(os.path.dirname(file))  # FIXME: does not work...
             os.chdir(os.path.dirname(file))  # Workaround: Change Python and MATLAB's path to the folder where the anatomical file is, so that user just needs to click on it
             matlab.spm_image('display', str_to_raw(file))  # Convert path to raw string to avoid \0 MATLAB string termination character
@@ -287,7 +291,7 @@ Note: you need to `pip install mlab` before using this script.
     if ask_step():  # Wait for user to be ready
         for files in tqdm(grouper(checkreg_display_count, files_list), total=int(len(files_list)/6), leave=True, unit='files'):
             if verbose: print("- Processing files: %s" % repr(files))
-            if not ask_next(): break  # ask for use to load the next file? Becaus else, the bridge does not wait and loads all files one after the other
+            if not ask_next(): break  # ask user if we load the next file?
             matlab.spm_check_registration(*files)
 
     # == COPY ANATOMICAL TO OTHER CONDITIONS
