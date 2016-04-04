@@ -75,25 +75,34 @@ except:
 
 def ask_step():
     '''Ask to user if s/he is ready to do the step'''
-    user_choice = raw_input('Do this step? [C]ontinue (default), [S]kip to next, [A]bort: ')
-    if user_choice.lower() == 'a':
-        sys.exit(0)
-    elif user_choice.lower() == 's':
-        return False
-    else:
-        return True
+    while 1:
+        user_choice = raw_input('Do this step? [C]ontinue (default), [S]kip to next, [A]bort: ')
+        if user_choice.lower() == 'a':
+            sys.exit(0)
+        elif user_choice.lower() == 's':
+            return False
+        elif len(user_choice) == 0 or user_choice.lower() == 'c':
+            return True
+        else:
+            print("Incorrect entry. Please type one of the proposed choices.")
 
-def ask_next(filepath=''):
+def ask_next(filepath='', msg=None):
     '''Ask to user if s/he is ready to process next file'''
-    user_choice = raw_input("\nLoad next file %s? [C]ontinue (default), [S]kip to next step, [N]ext file, [A]bort: " % filepath)
-    if user_choice.lower() == 'a':
-        sys.exit(0)
-    elif user_choice.lower() == 's':
-        return None
-    elif user_choice.lower() == 'n':
-        return False
-    else:
-        return True
+    if not msg:
+        msg = "\nLoad next file %s? [C]ontinue (default), [S]kip to next step, [N]ext file, [A]bort: " % filepath
+
+    while 1:
+        user_choice = raw_input(msg)
+        if user_choice.lower() == 'a':
+            sys.exit(0)
+        elif user_choice.lower() == 's':
+            return None
+        elif user_choice.lower() == 'n':
+            return False
+        elif len(user_choice) == 0 or user_choice.lower() == 'c':
+            return True
+        else:
+            print("Incorrect entry. Please type one of the proposed choices.")
 
 def str_to_raw(str):
     '''Convert string received from commandline to raw (unescaping the string)'''
@@ -291,7 +300,9 @@ Note: you need to `pip install mlab` before using this script.
     if ask_step():  # Wait for user to be ready
         for files in tqdm(grouper(checkreg_display_count, files_list), total=int(len(files_list)/6), leave=True, unit='files'):
             if verbose: print("- Processing files: %s" % repr(files))
-            if not ask_next(): break  # ask user if we load the next file?
+            uchoice = ask_next(file)  # ask user if we load the next file?
+            if uchoice is None: break
+            if uchoice == False: continue
             matlab.spm_check_registration(*files)
 
     # == COPY ANATOMICAL TO OTHER CONDITIONS
@@ -354,13 +365,9 @@ Note: you need to `pip install mlab` before using this script.
                 im_anat = os.path.join(rootfolderpath, im_anat)
                 im_func = os.path.join(rootfolderpath, im_func)
                 # Wait for user to be ready
-                user_choice = raw_input('Open next registration for condition %s, subject id %s? Enter to continue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (cond, id))
-                if user_choice.lower() == 's':
-                    break
-                elif user_choice.lower() == 'n':
-                    continue
-                elif user_choice.lower() == 'a':
-                    return 0
+                uchoice = ask_next(msg='Open next registration for condition %s, subject id %s? Enter to continue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (cond, id))  # ask user if we load the next file?
+                if uchoice is None: break
+                if uchoice == False: continue
                 # Send to MATLAB checkreg!
                 matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                 matlab.spm_check_registration(im_anat, im_func)
