@@ -363,20 +363,25 @@ Note: you need to `pip install mlab` before using this script.
         for cond in im_table:  # for each condition
             for id in tqdm(im_table[cond], total=total_images_step5, initial=current_image_step5, leave=True, unit='subjects'):  # for each subject id in each condition
                 current_image_step5 += 1
-                # Randomly choose one anatomical image (there should be only one anyway) and one functional image
-                im_anat = random.choice(im_table[cond][id]['mprage'])
-                im_func = random.choice(im_table[cond][id]['rest'])
-                if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
-                # Build full absolute path for MATLAB
-                im_anat = os.path.join(rootfolderpath, im_anat)
-                im_func = os.path.join(rootfolderpath, im_func)
                 # Wait for user to be ready
                 uchoice = ask_next(msg='Open next registration for condition %s, subject id %s? Enter to [c]ontinue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (cond, id))  # ask user if we load the next file?
                 if uchoice is None: break
                 if uchoice == False: continue
-                # Send to MATLAB checkreg!
-                matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
-                matlab.spm_check_registration(im_anat, im_func)
+                while 1:
+                    # Randomly choose one anatomical image (there should be only one anyway) and one functional image
+                    im_anat = random.choice(im_table[cond][id]['mprage'])
+                    im_func = random.choice(im_table[cond][id]['rest'])
+                    if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
+                    # Build full absolute path for MATLAB
+                    im_anat = os.path.join(rootfolderpath, im_anat)
+                    im_func = os.path.join(rootfolderpath, im_func)
+                    # Send to MATLAB checkreg!
+                    matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
+                    matlab.spm_check_registration(im_anat, im_func)
+                    # Allow user to select another image if not enough contrast
+                    uchoice = raw_input("Not enough contrasts? Want to load another T2 image? [R]andomly select another T2, Enter to [c]ontinue to next subject: ")
+                    if len(uchoice) == 0 or uchoice.lower() == 'c':  # redo the loop if the user entered any character
+                        break
 
     # == END: now user must execute the standard preprocessing script
     print("\nAll done. You should now use the standard preprocessing script. Quitting.")
