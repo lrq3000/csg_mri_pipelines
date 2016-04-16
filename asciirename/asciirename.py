@@ -38,14 +38,23 @@
 
 from __future__ import print_function
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 import argparse
 import os
-import unidecode  # to convert unicode accentuated strings to ascii
 import shlex
 import shutil
 import sys
+
+try:
+    # to convert unicode accentuated strings to ascii
+    from unidecode import unidecode
+except ImportError:
+    # native alternative but may remove quotes and some characters (and be slower?)
+    import unicodedata
+    def unidecode(s):
+        return unicodedata.normalize('NFKD', s).encode('ascii', 'ignore')
+    print("Notice: for reliable ascii conversion, you should pip install unidecode. Falling back to native unicodedata lib.")
 
 try:
     from scandir import walk # use the faster scandir module if available (Python >= 3.5), see https://github.com/benhoyt/scandir
@@ -270,7 +279,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     for dirpath, filename in recwalk(unicode(rootfolderpath), topdown=False):  # IMPORTANT: need to supply a unicode path to os.walk in order to get back unicode filenames! Also need to walk the tree bottom-up (from leaf to root), else if we change the directories names before the dirs/files they contain, we won't find them anymore!
         count_files += 1
         if verbose: print("- Processing file %s\n" % os.path.join(dirpath, filename))
-        ascii_filename = unidecode.unidecode(filename)  # native alternative but may remove quotes and some characters: unicodedata.normalize('NFKD', filename).encode('ascii','ignore')
+        ascii_filename = unidecode(filename)  # converting unicode string to ascii (ie, convert accentuated characters to their non-accentuated counterparts)
         if ascii_filename != filename:  # check that the filename/directory was not already ascii only
             if verbose: print("- Renaming non-ascii file/dir %s to %s\n" % (filename, ascii_filename))
             shutil.move(os.path.join(dirpath, filename), os.path.join(dirpath, ascii_filename))
