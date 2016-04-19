@@ -8,16 +8,17 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.4
+% v0.5
 %
 
 % ------ PARAMETERS HERE
 TR = 2.0;
-conn_file = fullfile(pwd, 'conn_project.mat');
-%root_path = 'G:\Work\GigaData\Conn_test';
-root_path = 'H:\Stephen\DONE\Patients-and-controls';
+conn_file = fullfile(pwd, 'conn_project.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
+root_path = 'G:\Work\GigaData\Conn_test\Patients-and-controls';
+%root_path = 'H:\Stephen\DONE\Patients-and-controls';
 path_to_spm = 'G:\Work\Programs\matlab_tools\spm12';
 path_to_conn = 'G:\Work\Programs\matlab_tools\conn';
+path_to_roi_maps = 'G:\Work\GigaData\rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
 % ------ END OF PARAMETERS
 
 
@@ -77,6 +78,26 @@ for c=1:length(conditions)
         % ART movement artifacts correction
         data.conditions{c}.subjects{s}.files.covars1.movement = regex_files(funcpath, '^art_regression_outliers_and_movement_s8rwa.+\.mat$');
     end
+end
+
+% ROIs detection
+if length(path_to_roi_maps) > 0
+    fprintf('ROIs maps detection...\n');
+    % Get all the roi files
+    roi_maps = regex_files(path_to_roi_maps, '^.+\.nii$');
+    % Extract the filenames, they will serve as the roi names in CONN
+    roi_names = {};
+    for r=1:length(roi_maps)
+        [~, n] = fileparts(roi_maps{r});
+        roi_names{r} = n;
+    end
+end
+
+% Sanity check: check that there are loaded images, else the tree structure is obviously wrong
+a = data.conditions{:};
+b = a.subjects{:};
+if length(b.files.struct) == 0
+    error('No subject found. Please check that the specified root_path follows the required tree structure.');
 end
 
 
@@ -141,6 +162,17 @@ end
 % COVARIATES LEVEL-1
 CONN_x.Setup.covariates.names = {'movement'};
 CONN_x.Setup.covariates.add = 0;
+
+% ROIs maps
+if length(path_to_roi_maps) > 0
+    %start_rois = length(CONN_x.Setup.rois.names);
+    CONN_x.Setup.rois.add = 0; % Add over the existing ROIs
+    for r=1:length(roi_names)
+        %s = r+start_rois
+        CONN_x.Setup.rois.names{r} = roi_names{r};
+        CONN_x.Setup.rois.files{r} = roi_maps{r};
+    end
+end
 
 % ---- SAVE/LOAD INTO CONN
 fprintf('-- Save/load into CONN --\n');
