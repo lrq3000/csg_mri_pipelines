@@ -7,17 +7,19 @@ function conn_subjects_loader()
 %
 % by Stephen Larroque
 % Created on 2016-04-11
-% Tested on CONN 2015
-% v0.3
+% Tested on conn15h and conn16a
+% v0.4
 %
 
 % ------ PARAMETERS HERE
 TR = 2.0;
 conn_file = fullfile(pwd, 'conn_project.mat');
-root_path = 'G:\Work\GigaData\Conn_test';
+%root_path = 'G:\Work\GigaData\Conn_test';
+root_path = 'H:\Stephen\DONE\Patients-and-controls';
 path_to_spm = 'G:\Work\Programs\matlab_tools\spm12';
 path_to_conn = 'G:\Work\Programs\matlab_tools\conn';
 % ------ END OF PARAMETERS
+
 
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
 bakpath = path; % backup the current path variable
@@ -25,8 +27,13 @@ restoredefaultpath(); matlabpath(strrep(matlabpath, userpath, '')); % clean up t
 addpath(path_to_spm); % add the path to SPM
 addpath(path_to_conn); % add the path to CONN toolbox
 
+fprintf('== Conn subjects loader ==\n');
+
 % ------ LOADING SUBJECTS FILES
+fprintf('-- Loading subjects files --\n');
+
 % Scan the root path to extract all conditions and subjects names
+fprintf('Loading conditions (subjects groups)...\n');
 % Extract conditions
 conditions = get_dirnames(root_path);
 conditions = conditions(~strcmp(conditions, 'JOBS')); % remove JOBS from the conditions
@@ -39,10 +46,15 @@ for c=1:length(conditions)
 end
 
 % Extracting all info and files for each subject necessary to construct the CONN project
+fprintf('Detect images for all subjects...\n');
 data = struct('conditions', []);
 data.conditions = struct('subjects', {});
+subjects_total = 0;
 for c=1:length(conditions)
     for s=1:length(subjects{c}.names)
+        % Counting total number of subjects by the way
+        subjects_total = subjects_total + 1;
+        fprintf('Detect images for subject %i...\n', subjects_total);
         % Initialize the subject's struct
         sname = subjects{c}.names{s};
         spath = fullfile(root_path, conditions{c}, sname);
@@ -61,19 +73,16 @@ for c=1:length(conditions)
         data.conditions{c}.subjects{s}.files.roi.grey = regex_files(structpath, '^m0wrp1.+\.nii$');
         data.conditions{c}.subjects{s}.files.roi.white = regex_files(structpath, '^m0wrp2.+\.nii$');
         data.conditions{c}.subjects{s}.files.roi.csf = regex_files(structpath, '^m0wrp3.+\.nii$');
-    end
-end
-
-% Count total number of subjects
-subjects_total = 0;
-for c=1:length(conditions)
-    for s=1:length(subjects{c}.names)
-        subjects_total = subjects_total + 1;
+        % Covariates 1st-level
+        % ART movement artifacts correction
+        data.conditions{c}.subjects{s}.files.covars1.movement = regex_files(funcpath, '^art_regression_outliers_and_movement_s8rwa.+\.mat$');
     end
 end
 
 
 % ---- FILLING CONN PROJECT STRUCT
+fprintf('-- Generating CONN project struct --\n');
+fprintf('Struct initialization...\n');
 clear CONN_x;
 CONN_x = {};
 
@@ -82,14 +91,20 @@ CONN_x = {};
 %load(conn_file);
 
 % SETUP
-CONN_x.filename = conn_file;            % New conn_*.mat experiment name
+CONN_x.filename = conn_file; % Our new conn_*.mat project filename
 CONN_x.Setup.isnew = 1;  % tell CONN to fill this struct with the default project structure (ie, add all the required fields)
 CONN_x.Setup.done = 0;  % do not execute any task, just fill the fields
 CONN_x.Setup.nsubjects = subjects_total;
 CONN_x.Setup.RT = ones(1, subjects_total) * TR;
 CONN_x.Setup.acquisitiontype = 1;
 
+% OTHER PARTS -> DISABLE
+CONN_x.Denoising.done = 0;
+CONN_x.Analysis.done = 0;
+CONN_x.Results.done = 0;
+
 % LOADING IMAGES
+fprintf('Loading images...\n');
 % Initializing required fields
 CONN_x.Setup.structurals = {};
 CONN_x.Setup.functionals = {};
@@ -110,28 +125,41 @@ for c=1:length(conditions)
         CONN_x.Setup.masks.Grey{sid} = data.conditions{c}.subjects{s}.files.roi.grey;
         CONN_x.Setup.masks.White{sid} = data.conditions{c}.subjects{s}.files.roi.white;
         CONN_x.Setup.masks.CSF{sid} = data.conditions{c}.subjects{s}.files.roi.csf;
+        % Covariates 1st-level
+        CONN_x.Setup.covariates.files{1}{sid}{1} = data.conditions{c}.subjects{s}.files.covars1.movement;
     end
 end
 
 % SUBJECTS GROUPS
+fprintf('Loading groups...\n');
 CONN_x.Setup.subjects.group_names = conditions;
 CONN_x.Setup.subjects.groups = [];
 for c=1:length(conditions)
     CONN_x.Setup.subjects.groups = [CONN_x.Setup.subjects.groups ones(1, length(subjects{c}.names))*c];
 end
 
+% COVARIATES LEVEL-1
+CONN_x.Setup.covariates.names = {'movement'};
+CONN_x.Setup.covariates.add = 0;
+
+% ---- SAVE/LOAD INTO CONN
+fprintf('-- Save/load into CONN --\n');
 % EXECUTE BATCH (to convert our raw CONN_x struct into a project file - because the structure is a bit different with the final CONN_x (eg, CONN_x.Setup.structural instead of CONN_x.Setup.structurals with an 's' at the end, plus the structure inside is different)
-conn_batch(CONN_x);  % save th structure onto our file
+fprintf('Save project via conn_batch (may take a few minutes)...\n');
+conn_batch(CONN_x);  % save our CONN_x structure onto a project file using conn_batch() to do the conversion and fill missing fields
 %save(conn_file, 'CONN_x');  % saving directly into a mat file does not work because conn_batch will reprocess CONN_x into the internal format, which is different to conn_batch API.
 
 % LOAD/DISPLAY EXPERIMENT FILE INTO CONN GUI
-% launches conn gui to explore results
+fprintf('Load project into CONN GUI...\n');
+% Clear up a bit of memory
+clear CONN_x data;
+% Launch conn gui to explore results
 conn;  % launch CONN
 conn('load', conn_file);  % Load the parameters
 conn gui_setup; % Refresh display: need to refresh the gui to show the loaded parameters. You can also directly switch to any other panel: gui_setup, gui_results, etc.
 
 % THE END
-fprintf('All jobs done! Press Enter to restore path and exit...\n');
+fprintf('Done! Press Enter to restore path and exit...\n');
 input('','s');
 path(bakpath); % restore the path to the previous state
 end  % endfunction
