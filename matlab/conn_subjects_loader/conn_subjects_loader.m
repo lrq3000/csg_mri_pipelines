@@ -5,21 +5,26 @@ function conn_subjects_loader()
 % The tree structure from the root must follow the following structure:
 % /root_pth/subject_id/data/(mprage|rest)/*.(img|hdr) -- Note: mprage for structural MRI, rest for fMRI
 %
+% If you need to modify this script, take a look at the conn_batch_workshop_nyudataset.m script provided with CONN, it's a very good example that inspired this script.
+%
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.5
+% v0.6.5
 %
 
 % ------ PARAMETERS HERE
-TR = 2.0;
+TR = 2.46;
 conn_file = fullfile(pwd, 'conn_project.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
-root_path = 'G:\Work\GigaData\Conn_test\Patients-and-controls';
+root_path = 'G:\Work\GigaData\Conn_test\Propofol';
 %root_path = 'H:\Stephen\DONE\Patients-and-controls';
 path_to_spm = 'G:\Work\Programs\matlab_tools\spm12';
 path_to_conn = 'G:\Work\Programs\matlab_tools\conn';
 path_to_roi_maps = 'G:\Work\GigaData\rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
+inter_or_intra = 1; % 0 for inter subjects analysis (each condition = a different group in covariates 2nd level) - 1 for intra subject analysis (each condition = a different session, only one subjects group)
 % ------ END OF PARAMETERS
+
+fprintf('Note: this script expects a very specific directry tree layout\nfor your images (see script header comment). If not met,\nthis may produce errors like "Index exceeds matrix dimensions."\nwhen executing conn_batch(CONN_x).\n');
 
 
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
@@ -46,16 +51,29 @@ for c=1:length(conditions)
     subjects{c}.names = subjn;
 end
 
+% Counting number of subjects
+subjects_real_total = 0;
+subjects_total = 0;
+for c=1:length(conditions)
+    subjects_real_total = subjects_real_total + length(subjects{c}.names);
+end
+if inter_or_intra == 0
+    % If inter-subjects project: count every subjects across all conditions
+    subjects_total = subjects_real_total;
+elseif inter_or_intra == 1
+    % If intra-subject project: count subjects of the first session, the other sessions are expected to include the same subjects
+    subjects_total = length(subjects{1}.names);
+end
+
 % Extracting all info and files for each subject necessary to construct the CONN project
 fprintf('Detect images for all subjects...\n');
 data = struct('conditions', []);
 data.conditions = struct('subjects', {});
-subjects_total = 0;
+sid = 0;
 for c=1:length(conditions)
     for s=1:length(subjects{c}.names)
-        % Counting total number of subjects by the way
-        subjects_total = subjects_total + 1;
-        fprintf('Detect images for subject %i...\n', subjects_total);
+        sid = sid + 1;
+        fprintf('Detect images for subject %i/%i...\n', sid, subjects_real_total);
         % Initialize the subject's struct
         sname = subjects{c}.names{s};
         spath = fullfile(root_path, conditions{c}, sname);
@@ -93,11 +111,23 @@ if length(path_to_roi_maps) > 0
     end
 end
 
-% Sanity check: check that there are loaded images, else the tree structure is obviously wrong
+% Sanity checks
+% 1. Check that there are loaded images, else the tree structure is obviously wrong
 a = data.conditions{:};
 b = a.subjects{:};
 if length(b.files.struct) == 0
     error('No subject found. Please check that the specified root_path follows the required tree structure.');
+end
+% 2. If intra-subject project, check that there is the exact same subjects across all conditions (= sessions here)
+if inter_or_intra == 1
+    if length(conditions) < 2
+        error('Project set to be intra-subject, but there are less than 2 sessions!')
+    end
+    for c=2:length(conditions)
+        if strcmp( char(subjects{c}.names), char(subjects{1}.names) ) == 0
+            error('Project set to be intra-subject, but all sessions do not contain the same subjects (or some are missing in one session)!');
+        end
+    end
 end
 
 
@@ -136,30 +166,54 @@ CONN_x.Setup.masks.CSF = {};
 sid = 0; % subject counter, because we need to add them all in a row in CONN, we assign conditions later
 for c=1:length(conditions)
     for s=1:length(subjects{c}.names)
-        sid = sid + 1;
+        % Set subject id and session id depending on if we do inter-subjects project or intra-subject
+        if inter_or_intra == 0
+            % Inter-subjects project: each subject gets its own id, and they will be separated in different groups in covars 2nd-level
+            sid = sid + 1;
+            sessid = 1;  % and we always use one session only
+        elseif inter_or_intra == 1
+            % Intra-subject project: the different conditions are just various sessions for the same subjects, so we reuse the subject's id and just make a new session
+            sid = s;
+            sessid = c;
+        end
+
         % Structural and functional images
-        CONN_x.Setup.structurals{sid} = {};
-        CONN_x.Setup.functionals{sid} = {};
-        CONN_x.Setup.structurals{sid}{1} = data.conditions{c}.subjects{s}.files.struct;
-        CONN_x.Setup.functionals{sid}{1} = char(data.conditions{c}.subjects{s}.files.func); % convert cell array to char array
+        if length(CONN_x.Setup.structurals) < sid
+            CONN_x.Setup.structurals{sid} = {};
+            CONN_x.Setup.functionals{sid} = {};
+        end
+        CONN_x.Setup.structurals{sid}{sessid} = data.conditions{c}.subjects{s}.files.struct;
+        CONN_x.Setup.functionals{sid}{sessid} = char(data.conditions{c}.subjects{s}.files.func); % convert cell array to char array
         % ROI masks
-        CONN_x.Setup.masks.Grey{sid} = data.conditions{c}.subjects{s}.files.roi.grey;
-        CONN_x.Setup.masks.White{sid} = data.conditions{c}.subjects{s}.files.roi.white;
-        CONN_x.Setup.masks.CSF{sid} = data.conditions{c}.subjects{s}.files.roi.csf;
+        CONN_x.Setup.masks.Grey{sid}{sessid} = data.conditions{c}.subjects{s}.files.roi.grey;
+        CONN_x.Setup.masks.White{sid}{sessid} = data.conditions{c}.subjects{s}.files.roi.white;
+        CONN_x.Setup.masks.CSF{sid}{sessid} = data.conditions{c}.subjects{s}.files.roi.csf;
         % Covariates 1st-level
-        CONN_x.Setup.covariates.files{1}{sid}{1} = data.conditions{c}.subjects{s}.files.covars1.movement;
+        CONN_x.Setup.covariates.files{1}{sid}{sessid} = data.conditions{c}.subjects{s}.files.covars1.movement;
     end
 end
 
 % SUBJECTS GROUPS
-fprintf('Loading groups...\n');
-CONN_x.Setup.subjects.group_names = conditions;
-CONN_x.Setup.subjects.groups = [];
-for c=1:length(conditions)
-    CONN_x.Setup.subjects.groups = [CONN_x.Setup.subjects.groups ones(1, length(subjects{c}.names))*c];
+if inter_or_intra == 0
+    fprintf('Loading groups...\n');
+    CONN_x.Setup.subjects.group_names = conditions;
+    CONN_x.Setup.subjects.groups = [];
+    for c=1:length(conditions)
+        CONN_x.Setup.subjects.groups = [CONN_x.Setup.subjects.groups ones(1, length(subjects{c}.names))*c];
+    end
+elseif inter_or_intra == 1
+    CONN_x.Setup.subjects.group_names = {'AllSubjects'};
+    CONN_x.Setup.subjects.groups = ones(1, subjects_total);
 end
 
-% COVARIATES LEVEL-1
+% CONDITIONS DURATION
+CONN_x.Setup.conditions.names={'rest'};
+for ncond=1,for nsub=1:subjects_total,for nses=1:length(conditions)
+    CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses}=0;
+    CONN_x.Setup.conditions.durations{ncond}{nsub}{nses}=inf;
+end;end;end     % rest condition (all sessions)
+
+% COVARIATES LEVEL-1: intra-subject covariates: artifacts we will regress (remove)
 CONN_x.Setup.covariates.names = {'movement'};
 CONN_x.Setup.covariates.add = 0;
 
@@ -178,8 +232,9 @@ end
 fprintf('-- Save/load into CONN --\n');
 % EXECUTE BATCH (to convert our raw CONN_x struct into a project file - because the structure is a bit different with the final CONN_x (eg, CONN_x.Setup.structural instead of CONN_x.Setup.structurals with an 's' at the end, plus the structure inside is different)
 fprintf('Save project via conn_batch (may take a few minutes)...\n');
-conn_batch(CONN_x);  % save our CONN_x structure onto a project file using conn_batch() to do the conversion and fill missing fields
-%save(conn_file, 'CONN_x');  % saving directly into a mat file does not work because conn_batch will reprocess CONN_x into the internal format, which is different to conn_batch API.
+% save our CONN_x structure onto a project file using conn_batch() to do the conversion and fill missing fields
+conn_batch(CONN_x); % if you get an error, your CONN_x struct is malformed (maybe some files are missing, or project type is incorrect?)
+%save(conn_file, 'CONN_x');  % DEPRECATED: saving directly into a mat file does not work because conn_batch will reprocess CONN_x into the internal format, which is different to conn_batch API.
 
 % LOAD/DISPLAY EXPERIMENT FILE INTO CONN GUI
 fprintf('Load project into CONN GUI...\n');
@@ -191,7 +246,9 @@ conn('load', conn_file);  % Load the parameters
 conn gui_setup; % Refresh display: need to refresh the gui to show the loaded parameters. You can also directly switch to any other panel: gui_setup, gui_results, etc.
 
 % THE END
-fprintf('Done! Press Enter to restore path and exit...\n');
+fprintf('Done!\n');
+fprintf('Tip: when you hover the mouse cursor over an image, a title with the file path appears. You can hover the cursor on it to get the full path, or double click on it to show the file on the right panel.\n');
+fprintf('Press Enter to restore path and exit...\n');
 input('','s');
 path(bakpath); % restore the path to the previous state
 end  % endfunction
