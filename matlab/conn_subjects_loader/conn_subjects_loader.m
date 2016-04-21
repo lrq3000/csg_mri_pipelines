@@ -11,7 +11,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.7.4
+% v0.7.5
 %
 
 % ------ PARAMETERS HERE
