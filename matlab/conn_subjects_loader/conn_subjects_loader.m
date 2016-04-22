@@ -11,24 +11,25 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.7.5
+% v0.8.0
 %
 
 % ------ PARAMETERS HERE
-TR = 2.46;
-conn_file = fullfile(pwd, 'conn_project.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
-root_path = 'G:\Work\GigaData\Conn_test\Propofol';
-%root_path = 'H:\Stephen\DONE\Patients-and-controls';
-path_to_spm = 'G:\Work\Programs\matlab_tools\spm12';
-path_to_conn = 'G:\Work\Programs\matlab_tools\conn';
-path_to_roi_maps = 'G:\Work\GigaData\rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
-inter_or_intra = 1; % 0 for inter subjects analysis (each condition = a different group in covariates 2nd level) - 1 for intra subject analysis (each condition = a different session, only one subjects group)
+TR = 2.0;
+conn_file = fullfile(pwd, 'conn_project_patients2.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
+root_path = '/media/coma_meth/CALIMERO/Stephen/DONE/Patients-and-controls';
+path_to_spm = '/home/coma_meth/Documents/Stephen/Programs/spm12';
+path_to_conn = '/home/coma_meth/Documents/Stephen/Programs/conn';
+path_to_roi_maps = '/media/coma_meth/CALIMERO/Stephen/rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
+func_smoothed_prefix = 's8rwa'; % prefix of the smoothed motion corrected images that we need to remove to get the filename of the original, unsmoothed functional image. This is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
+inter_or_intra = 0; % 0 for inter subjects analysis (each condition = a different group in covariates 2nd level) - 1 for intra subject analysis (each condition = a different session, only one subjects group)
 automate = 1; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
 % ------ END OF PARAMETERS
 
+% Notes and warnings
 fprintf('Note: data is expected to be already preprocessed\n(realignment/slicetiming/coregistration/segmentation/normalization/smoothing)\n');
 fprintf('Note2: this script expects a very specific directry tree layout\nfor your images (see script header comment). If not met,\nthis may produce errors like "Index exceeds matrix dimensions."\nwhen executing conn_batch(CONN_x).\n');
-
+fprintf('Note3: if in inter-subjects mode you get the error\n"Reference to non-existent field t. Error in spm_hrf", you have to\nedit spm_hrf.m to replace stats.fmri.t by stats.fmri.fmri_t .\n');
 
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
 bakpath = path; % backup the current path variable
@@ -97,7 +98,8 @@ for c=1:length(conditions)
                                                                 );
         % Extracting structural realigned normalized images
         structpath = getimgpath(spath, 'struct');
-        funcpath = getimgpath(spath, 'func_motion_corrected');
+        funcpath = getimgpath(spath, 'func'); % do not use the func_motion_corrected subdirectory to find smoothed func images, because we need both the smoothed motion corrected images AND the original images for CONN to work best
+        funcmotpath = getimgpath(spath, 'func_motion_corrected');
         data.conditions{c}.subjects{s}.files.struct = regex_files(structpath, '^wmr.+\.nii$');
         % Extracting functional motion artifacts corrected, realigned, smoothed images
         data.conditions{c}.subjects{s}.files.func = regex_files(funcpath, '^s8rwa.+\.img$');
@@ -108,7 +110,7 @@ for c=1:length(conditions)
         data.conditions{c}.subjects{s}.files.roi.csf = regex_files(structpath, '^m0wrp3.+\.nii$');
         % Covariates 1st-level
         % ART movement artifacts correction
-        data.conditions{c}.subjects{s}.files.covars1.movement = regex_files(funcpath, '^art_regression_outliers_and_movement_s8rwa.+\.mat$');
+        data.conditions{c}.subjects{s}.files.covars1.movement = regex_files(funcmotpath, '^art_regression_outliers_and_movement_s8rwa.+\.mat$');
     end
 end
 
@@ -221,8 +223,14 @@ elseif inter_or_intra == 1
 end
 
 % CONDITIONS DURATION
+nsessions = 1;
+if inter_or_intra == 0
+    nsessions = 1;
+elseif inter_or_intra == 1
+    nsessions = length(conditions);
+end
 CONN_x.Setup.conditions.names={'rest'};
-for ncond=1,for nsub=1:subjects_total,for nses=1:length(conditions)
+for ncond=1,for nsub=1:subjects_total,for nses=1:nsessions
     CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses}=0;
     CONN_x.Setup.conditions.durations{ncond}{nsub}{nses}=inf;
 end;end;end     % rest condition (all sessions)
@@ -240,6 +248,18 @@ if length(path_to_roi_maps) > 0
         CONN_x.Setup.rois.names{r} = roi_names{r};
         CONN_x.Setup.rois.files{r} = roi_maps{r};
     end
+end
+
+% ROI-level BOLD timeseries extraction: reuse smoothed functional images or use raw images?
+% See for more info: http://www.nitrc.org/forum/forum.php?thread_id=4515&forum_id=1144
+if length(func_smoothed_prefix) == 0
+    CONN_x.Setup.roifunctionals.roiextract = 1;
+else
+    CONN_x.Setup.roifunctionals.roiextract = 3;
+    CONN_x.Setup.roifunctionals.roiextract_rule = {};
+    CONN_x.Setup.roifunctionals.roiextract_rule{1} = 1; % work on filename, not on absolute path
+    CONN_x.Setup.roifunctionals.roiextract_rule{2} = ['^' func_smoothed_prefix];
+    CONN_x.Setup.roifunctionals.roiextract_rule{3} = '';
 end
 
 % Automate processing?
