@@ -11,12 +11,12 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.8.2
+% v0.8.3
 %
 
 % ------ PARAMETERS HERE
 TR = 2.0;
-conn_file = fullfile(pwd, 'conn_project_patients3.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
+conn_file = fullfile(pwd, 'conn_project_patients5.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
 root_path = '/media/coma_meth/CALIMERO/Stephen/DONE/Patientstest';
 path_to_spm = '/home/coma_meth/Documents/Stephen/Programs/spm12';
 path_to_conn = '/home/coma_meth/Documents/Stephen/Programs/conn';
@@ -273,8 +273,9 @@ end
 % ANALYSIS
 CONN_x.Analysis.type = 3; % do all analyses at once, we will explore and choose them later
 % ROI-to-ROI and Seed-to-Voxel
-%CONN_x.Analysis.sources = CONN_x.Setup.rois.names; % Use all ROIs
+CONN_x.Analysis.sources = CONN_x.Setup.rois.names; % Use all ROIs
 % Voxel-to-voxel
+% Note that conn_batch cannot do all 1st-level analyses, if you specify Analysis.measures then it will compute only Voxel-to-Voxel analysis, else only ROI-to-ROI/Seed-to-Voxel analysis (but we workaround that by calling conn_process directly for the other analyses, see below)
 CONN_x.Analysis.measures = conn_v2v('measurenames'); % Load all available kinds of measures
 
 % Automate processing?
@@ -306,6 +307,26 @@ end
 % If automate = 1, we also run the experiments, so the project file will also contain the results
 conn_batch(CONN_x); % if you get an error, your CONN_x struct is malformed (maybe some files are missing, or project type is incorrect?)
 %save(conn_file, 'CONN_x');  % DEPRECATED: saving directly into a mat file does not work because conn_batch will reprocess CONN_x into the internal format, which is different to conn_batch API.
+
+% PROCESS OTHER 1ST-LEVEL ANALYSES
+% conn_batch can only do one type of analysis at a time. Here we workaround by directly calling conn_process for each missed analysis.
+% First: load the CONN_x batch struct, conn_process will access it as a global.
+clear CONN_x;
+load(conn_file); % will load var CONN_x into workspace
+global CONN_x;
+CONN_x.gui.overwrite = 'Yes' % avoid CONN GUI asking us what to do, overwrite files directly
+% Compute Seed-to-Voxel 1st-level analysis
+conn_process('analyses_seed');
+% Compute ROI-to-ROI 1st-level analysis
+conn_process('analyses_seedandroi');
+% Compute Dynamic FC (functional connectivity) 1st-level analysis
+if inter_or_intra == 1  % CONN v16a cannot yet do inter subjects (across independent conditions/groups) dynamic FC, it can only work on intra-subject project over multiple sessions
+    conn_process('analyses_dyn');
+elseif inter_or_intra == 0
+    fprintf('Skipping Dynamic FC: CONN does not yet support inter-subjects project (works on multiple sessions but not multiple independent subjects groups/conditions).\n');
+end
+% Save the new struct and results!
+if isfield(CONN_x,'filename'), conn save; end;
 
 % LOAD/DISPLAY EXPERIMENT FILE INTO CONN GUI
 fprintf('Load project into CONN GUI...\n');
