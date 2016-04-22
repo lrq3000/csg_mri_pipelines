@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.3'
+__version__ = '1.0'
 
 import argparse
 import os
@@ -192,6 +192,8 @@ Also note that the program expects the anatomical images to be the same across a
 WARNING: if that's not the case (you have different anatomical images per condition), please DO NOT use this helper, or comment the reorientation step!
 
 Note: you need to `pip install mlab` before using this script.
+Note2: you need to have set both spm and spm_auto_reorient in your path in MATLAB before using this script.
+Note3: you need the pathmatcher.py library (see lrq3000 github).
 
     ''' % __version__
     ep = ''' '''
@@ -275,7 +277,7 @@ Note: you need to `pip install mlab` before using this script.
 
     # == SPM_AUTO_REORIENT
     # Get the list of anatomical images
-    print("\n=> STEP1: SPM_AUTO_REORIENT")
+    print("\n=> STEP1: SPM_AUTO_REORIENT OF STRUCTURAL MRI")
     if ask_step():  # Wait for user to be ready
         print("Starting the auto-reorienting process, please wait (this can take a while)...")
         # Auto reorient anatomical images
@@ -284,7 +286,7 @@ Note: you need to `pip install mlab` before using this script.
             matlab.spm_auto_reorient(file)
 
     # == CHECK REORIENT AND MANUAL ADJUSTMENT
-    print("\n=> STEP2: CHECK REORIENT AND ADJUST MANUALLY")
+    print("\n=> STEP2: CHECK REORIENT AND ADJUST MANUALLY STRUCTURAL MRI")
     print("Anatomical will now be displayed. Please check that they are correctly oriented, if not, please adjust manually.")
     if ask_step():  # Wait for user to be ready
         for file in tqdm(files_list, leave=True, unit='files'):
@@ -297,8 +299,8 @@ Note: you need to `pip install mlab` before using this script.
             matlab.spm_image('display', str_to_raw(file))  # Convert path to raw string to avoid \0 MATLAB string termination character
 
     # == CHECK MULTIPLE IMAGES TOGETHER
-    print("\n=> STEP3: CHECK MULTIPLE IMAGES TOGETHER")
-    print("Multiple anatomical images will be displayed side by side as a sanity check of correct reorientation. Please check that they are all reoriented correctly (check ventricles, skull boundaries when sliding cursor to the edges, random points in images).")
+    print("\n=> STEP3: SIDE-BY-SIDE CHECK MULTIPLE SUBJECTS")
+    print("Multiple subjects' anatomical images will be displayed side by side as a sanity check of correct reorientation. Please check that they are all reoriented correctly (check ventricles, skull boundaries when sliding cursor to the edges, random points in images).")
     if ask_step():  # Wait for user to be ready
         imgs_pack_by = 6
         for files in tqdm(grouper(checkreg_display_count, files_list), total=int(len(files_list)/imgs_pack_by), leave=True, unit='files'):
@@ -312,7 +314,6 @@ Note: you need to `pip install mlab` before using this script.
             matlab.spm_check_registration(*files)
 
     # == COPY ANATOMICAL TO OTHER CONDITIONS
-    print("\n=> STEP4: Skipped...")
     # print("\n=> STEP4: COPYING ANATOMICAL IMAGES")
     # print("Anatomical images will now be copied onto other conditions, please wait a few minutes...")
     # if ask_step():  # Wait for user to be ready
@@ -321,10 +322,12 @@ Note: you need to `pip install mlab` before using this script.
             # os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
             # pathmatcher.main(r' -i "{inputpath}/{firstcond}" -ri "([^\/]+)/data/mprage/" -o "{inputpath}/{tocond}" -ro "\1/data/mprage/" --copy --force --yes --silent '.format(**template_vars), True)
 
-    # == REGISTRATION
-    print("\n=> STEP5: REGISTRATION OF FUNCTIONAL IMAGES")
+    # == COREGISTRATION
+    print("\n=> STEP4: MANUAL COREGISTRATION OF FUNCTIONAL IMAGES")
     print("A randomly selected functional image will now be displayed (bottom) along the corresponding anatomical image (top). Please reorient the functional image to match the anatomical image, and select all functional images to apply the reorientation.")
+    print("This step is very important, because the automatic coregistration algorithms are not optimal (they cannot be, the problem is non-linear), and thus they can fall in local optimums. A good manual coregistration ensures the automatic coregistration will be on-the-spot!")
     print("NOTE: you need to right-click on the bottom image, then click on Reorient Images > Current image. Red contours of the bottom functional image will be overlaid on the top anatomical image, and a side menu will open to allow you to reorient the bottom image and apply on other functional images.")
+    print("NOTE2: you can also enhance the contrasts by right-clicking on functional image and select Zoom > This image non zero, by setting the number of contours to 2 instead of 3, and by right-clicking on the anatomical image and select Image > Intensity Mapping > local > Equalised squared-histogram (you can also do the same intensity mapping change on the functional image, the contours will adapt according to the greater contrast).")
 
     if ask_step():  # Wait for user to be ready
         # -- Walk files and detect all anatomical and functional images (based on directories layout)
