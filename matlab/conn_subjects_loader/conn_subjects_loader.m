@@ -1,6 +1,8 @@
 function conn_subjects_loader()
 % conn_subjects_loader
 % Batch load all subjects and conditions from a given directory root into CONN. This saves quite a lot of time.
+% The script can then just show the CONN GUI and you do the rest, or automate and process everything and show you CONN GUI only when the results are available.
+% You can also resume your job if there is an error or if you CTRL-C (but don't rely too much on it, data can be corrupted). Resume can also be used if you add new subjects.
 % This script expects the subjects data to be already preprocessed.
 % The tree structure from the root must follow the following structure:
 % /root_pth/subject_id/data/(mprage|rest)/*.(img|hdr) -- Note: mprage for structural MRI, rest for fMRI
@@ -11,7 +13,13 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.8.3
+% v0.9.0
+%
+% Licensed under MIT LICENSE
+% Copyleft 2016 Stephen Larroque
+% Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+% The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+% THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 %
 
 % ------ PARAMETERS HERE
@@ -24,7 +32,7 @@ path_to_roi_maps = '/media/coma_meth/CALIMERO/Stephen/DONE/roitest'; % Path to y
 func_smoothed_prefix = 's8rwa'; % prefix of the smoothed motion corrected images that we need to remove to get the filename of the original, unsmoothed functional image. This is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
 inter_or_intra = 0; % 0 for inter subjects analysis (each condition = a different group in covariates 2nd level) - 1 for intra subject analysis (each condition = a different session, only one subjects group)
 automate = 1; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
-resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted.
+resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted. Note that resume can also be used to add new subjects without reprocessing old ones.
 % ------ END OF PARAMETERS
 
 % Notes and warnings
