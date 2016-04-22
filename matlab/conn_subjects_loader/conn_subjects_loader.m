@@ -11,19 +11,20 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.8.0
+% v0.8.2
 %
 
 % ------ PARAMETERS HERE
 TR = 2.0;
-conn_file = fullfile(pwd, 'conn_project_patients2.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
-root_path = '/media/coma_meth/CALIMERO/Stephen/DONE/Patients-and-controls';
+conn_file = fullfile(pwd, 'conn_project_patients3.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
+root_path = '/media/coma_meth/CALIMERO/Stephen/DONE/Patientstest';
 path_to_spm = '/home/coma_meth/Documents/Stephen/Programs/spm12';
 path_to_conn = '/home/coma_meth/Documents/Stephen/Programs/conn';
-path_to_roi_maps = '/media/coma_meth/CALIMERO/Stephen/rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
+path_to_roi_maps = '/media/coma_meth/CALIMERO/Stephen/DONE/roitest'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
 func_smoothed_prefix = 's8rwa'; % prefix of the smoothed motion corrected images that we need to remove to get the filename of the original, unsmoothed functional image. This is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
 inter_or_intra = 0; % 0 for inter subjects analysis (each condition = a different group in covariates 2nd level) - 1 for intra subject analysis (each condition = a different session, only one subjects group)
 automate = 1; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
+resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted.
 % ------ END OF PARAMETERS
 
 % Notes and warnings
@@ -159,11 +160,15 @@ CONN_x = {};
 
 % SETUP
 CONN_x.filename = conn_file; % Our new conn_*.mat project filename
-CONN_x.Setup.isnew = 1;  % tell CONN to fill this struct with the default project structure (ie, add all the required fields)
+CONN_x.Setup.isnew = 1;  % tell CONN that this is a new project we will completely programmatically define without using a SPM.mat, and thus CONN should fill this struct with the default project structure (ie, add all the required fields)
+if resume_job == 1, CONN_x.Setup.isnew = 0; end;
 CONN_x.Setup.done = 0;  % do not execute any task, just fill the fields
 CONN_x.Setup.nsubjects = subjects_total;
 CONN_x.Setup.RT = ones(1, subjects_total) * TR;
-CONN_x.Setup.acquisitiontype = 1;
+CONN_x.Setup.acquisitiontype = 1; % continuous
+CONN_x.Setup.analyses=1:4; % set the type of analyses to run (basically: all)
+CONN_x.Setup.voxelresolution = 1; % set voxel resolution to the default, normalized template (2 for structurals, 3 for functionals)
+CONN_x.Setup.analysisunits = 1; % set BOLD signal units to percent signal change
 
 % OTHER PARTS -> DISABLE
 CONN_x.Denoising.done = 0;
@@ -262,13 +267,30 @@ else
     CONN_x.Setup.roifunctionals.roiextract_rule{3} = '';
 end
 
+% DENOISING
+%CONN_x.Denoising.confounds.names = [{'Grey Matter', 'White Matter', 'CSF'}, CONN_x.Setup.rois.names]; % use GM/WM/CSF + all rois as denoising confounds effects
+
+% ANALYSIS
+CONN_x.Analysis.type = 3; % do all analyses at once, we will explore and choose them later
+% ROI-to-ROI and Seed-to-Voxel
+%CONN_x.Analysis.sources = CONN_x.Setup.rois.names; % Use all ROIs
+% Voxel-to-voxel
+CONN_x.Analysis.measures = conn_v2v('measurenames'); % Load all available kinds of measures
+
 % Automate processing?
 if automate
-CONN_x.Setup.done = 1;
-CONN_x.Denoising.done = 1;
-CONN_x.Analysis.done = 1;
-CONN_x.Analysis.type = 3; % do all analyses at once, we will explore them and choose later
-CONN_x.Results.done = 1;
+    CONN_x.Setup.done = 1;
+    CONN_x.Denoising.done = 1;
+    CONN_x.Analysis.done = 1;
+    CONN_x.Results.done = 1;
+end
+
+% Resume?
+if resume_job
+    CONN_x.Setup.overwrite = 0;
+    CONN_x.Denoising.overwrite = 0;
+    CONN_x.Analysis.overwrite = 0;
+    CONN_x.Results.overwrite = 1;	
 end
 
 % ---- SAVE/LOAD INTO CONN
