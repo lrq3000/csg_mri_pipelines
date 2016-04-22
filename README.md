@@ -136,12 +136,11 @@ There is a CLI user interface: you can skip steps you already done or don't want
 usage: reorientation_registration_helper.py [-h] -i /some/path [-v]
 
 Reorientation and registration helper v1.0
-Description: Automate the file selection process that is required in SPM between each reorientation/registration.
+Description: Guide and automate the file selection process that is required in SPM between each reorientation/registration.
 
 No more useless clicks, just do the reorientation/registration in batch, you don't need to worry about selecting the corresponding files, this helper will do it for you.
 
-Also note that the program expects the anatomical images to be the same across all conditions. Thus, you will reorient the anatomical images only once per subject, and then they will be copied over all other conditions.
-WARNING: if that's not the case (you have different anatomical images per condition), please DO NOT use this helper, or comment the reorientation step!
+If you have tqdm installed, a nice progress bar will tell you how many subjects are remaining to be processed and how much time will it take at your current pace.
 
 Note: you need to `pip install mlab` before using this script.
 Note2: you need to have set both spm and spm_auto_reorient in your path in MATLAB before using this script.
@@ -167,6 +166,7 @@ optional arguments:
 #### Optional
 
 * scandir, to scan files faster
+* tqdm, to show the progress bar
 
 ## CONN Subjects Loader
 
