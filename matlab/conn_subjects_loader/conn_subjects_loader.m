@@ -13,7 +13,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.9.0
+% v0.9.2
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016 Stephen Larroque
@@ -31,7 +31,7 @@ path_to_conn = '/home/coma_meth/Documents/Stephen/Programs/conn';
 path_to_roi_maps = '/media/coma_meth/CALIMERO/Stephen/DONE/roitest'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
 func_smoothed_prefix = 's8rwa'; % prefix of the smoothed motion corrected images that we need to remove to get the filename of the original, unsmoothed functional image. This is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
 inter_or_intra = 0; % 0 for inter subjects analysis (each condition = a different group in covariates 2nd level) - 1 for intra subject analysis (each condition = a different session, only one subjects group)
-automate = 1; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
+automate = 0; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
 resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted. Note that resume can also be used to add new subjects without reprocessing old ones.
 % ------ END OF PARAMETERS
 
@@ -236,17 +236,31 @@ elseif inter_or_intra == 1
 end
 
 % CONDITIONS DURATION
-nsessions = 1;
 if inter_or_intra == 0
+    % Inter-subjects mode: create only one condition and one session, all files are considered to belong to different subjects and different conditions
+    nconditions = 1;
     nsessions = 1;
+    CONN_x.Setup.conditions.names={'rest'};
+    for ncond=1:nconditions,for nsub=1:subjects_total,for nses=1:nsessions
+        CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses}=0;
+        CONN_x.Setup.conditions.durations{ncond}{nsub}{nses}=inf;
+    end;end;end     % rest condition (all sessions)
 elseif inter_or_intra == 1
+    % Intra-subject mode: the different conditions are considered to be multiple sessions from same set of subjects. In CONN, we will describe that by adding one condition and one session per folder condition, and we will link the session to the condition (eg, condition rest1 will have onset and duration set only for session1, empty for session2, and on the opposite condition rest2 will have onset and duration set for session2 but not session1).
+    nconditions = length(conditions);
     nsessions = length(conditions);
+    CONN_x.Setup.conditions.names = conditions;
+    for ncond=1:nconditions,for nsub=1:subjects_total,for nses=1:nsessions
+        % Assign if session == condition, else set to empty
+        if ncond == nses
+            CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses} = 0;
+            CONN_x.Setup.conditions.durations{ncond}{nsub}{nses} = inf;
+        else
+            CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses} = [];
+            CONN_x.Setup.conditions.durations{ncond}{nsub}{nses} = [];
+        end
+    end;end;end     % rest condition (all sessions)
 end
-CONN_x.Setup.conditions.names={'rest'};
-for ncond=1,for nsub=1:subjects_total,for nses=1:nsessions
-    CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses}=0;
-    CONN_x.Setup.conditions.durations{ncond}{nsub}{nses}=inf;
-end;end;end     % rest condition (all sessions)
 
 % COVARIATES LEVEL-1: intra-subject covariates: artifacts we will regress (remove)
 CONN_x.Setup.covariates.names = {'movement'};
@@ -317,24 +331,24 @@ conn_batch(CONN_x); % if you get an error, your CONN_x struct is malformed (mayb
 %save(conn_file, 'CONN_x');  % DEPRECATED: saving directly into a mat file does not work because conn_batch will reprocess CONN_x into the internal format, which is different to conn_batch API.
 
 % PROCESS OTHER 1ST-LEVEL ANALYSES
-% conn_batch can only do one type of analysis at a time. Here we workaround by directly calling conn_process for each missed analysis.
-% First: load the CONN_x batch struct, conn_process will access it as a global.
-clear CONN_x;
-load(conn_file); % will load var CONN_x into workspace
-global CONN_x;
-CONN_x.gui.overwrite = 'Yes' % avoid CONN GUI asking us what to do, overwrite files directly
-% Compute Seed-to-Voxel 1st-level analysis
-conn_process('analyses_seed');
-% Compute ROI-to-ROI 1st-level analysis
-conn_process('analyses_seedandroi');
-% Compute Dynamic FC (functional connectivity) 1st-level analysis
-if inter_or_intra == 1  % CONN v16a cannot yet do inter subjects (across independent conditions/groups) dynamic FC, it can only work on intra-subject project over multiple sessions
-    conn_process('analyses_dyn');
-elseif inter_or_intra == 0
-    fprintf('Skipping Dynamic FC: CONN does not yet support inter-subjects project (works on multiple sessions but not multiple independent subjects groups/conditions).\n');
+if automate
+    clear CONN_x;
+    load(conn_file); % will load var CONN_x into workspace
+    global CONN_x;
+    CONN_x.gui.overwrite = 'Yes' % avoid CONN GUI asking us what to do, overwrite files directly
+    % Compute Seed-to-Voxel 1st-level analysis
+    conn_process('analyses_seed');
+    % Compute ROI-to-ROI 1st-level analysis
+    conn_process('analyses_seedandroi');
+    % Compute Dynamic FC (functional connectivity) 1st-level analysis
+    %if inter_or_intra == 1  % CONN v16a cannot yet do inter subjects (across independent conditions/groups) dynamic FC, it can only work on intra-subject project over multiple sessions
+        %conn_process('analyses_dyn');
+    %elseif inter_or_intra == 0
+        fprintf('Skipping Dynamic FC: CONN does not yet support inter-subjects project (works on multiple sessions but not multiple independent subjects groups/conditions).\n');
+    %end
+    % Save the new struct and results!
+    if isfield(CONN_x,'filename'), conn save; end;
 end
-% Save the new struct and results!
-if isfield(CONN_x,'filename'), conn save; end;
 
 % LOAD/DISPLAY EXPERIMENT FILE INTO CONN GUI
 fprintf('Load project into CONN GUI...\n');
