@@ -331,7 +331,9 @@ conn_batch(CONN_x); % if you get an error, your CONN_x struct is malformed (mayb
 %save(conn_file, 'CONN_x');  % DEPRECATED: saving directly into a mat file does not work because conn_batch will reprocess CONN_x into the internal format, which is different to conn_batch API.
 
 % PROCESS OTHER 1ST-LEVEL ANALYSES
+% conn_batch can only do one type of analysis at a time. Here we workaround by directly calling conn_process for each missed analysis.
 if automate
+    % First: load the CONN_x batch struct, conn_process will access it as a global
     clear CONN_x;
     load(conn_file); % will load var CONN_x into workspace
     global CONN_x;
