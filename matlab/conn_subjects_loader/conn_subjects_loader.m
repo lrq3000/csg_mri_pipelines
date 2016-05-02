@@ -13,7 +13,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.9.3
+% v0.9.4
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016 Stephen Larroque
@@ -127,7 +127,7 @@ end
 if length(path_to_roi_maps) > 0
     fprintf('ROIs maps detection...\n');
     % Get all the roi files
-    roi_maps = regex_files(path_to_roi_maps, '^.+\.(nii|hdr)$');
+    roi_maps = regex_files(path_to_roi_maps, '^.+\.(nii|img)$');  % can also provide .hdr, but if it's a multi-rois image, then it won't be detected automatically. For automatic multi-rois detection in CONN, provide the .img instead of .hdr.
     % Extract the filenames, they will serve as the roi names in CONN
     roi_names = {};
     for r=1:length(roi_maps)
@@ -260,6 +260,12 @@ elseif inter_or_intra == 1
             CONN_x.Setup.conditions.durations{ncond}{nsub}{nses} = [];
         end
     end;end;end     % rest condition (all sessions)
+    % Add a special condition that will include absolutely all subjects, this allows Dynamic Functional Connectivity to work
+    CONN_x.Setup.conditions.names = [CONN_x.Setup.conditions.names {'AllSessions'}];
+    for ncond=nconditions+1,for nsub=1:subjects_total,for nses=1:nsessions
+        CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses}=0;
+        CONN_x.Setup.conditions.durations{ncond}{nsub}{nses}=inf;
+    end;end;end     % rest condition (all sessions)
 end
 
 % COVARIATES LEVEL-1: intra-subject covariates: artifacts we will regress (remove)
@@ -343,11 +349,11 @@ if automate
     % Compute ROI-to-ROI 1st-level analysis
     conn_process('analyses_seedandroi');
     % Compute Dynamic FC (functional connectivity) 1st-level analysis
-    %if inter_or_intra == 1  % CONN v16a cannot yet do inter subjects (across independent conditions/groups) dynamic FC, it can only work on intra-subject project over multiple sessions
-        %conn_process('analyses_dyn');
-    %elseif inter_or_intra == 0
+    if inter_or_intra == 1  % CONN v16a cannot yet do inter subjects (across independent conditions/groups) dynamic FC, it can only work on intra-subject project over multiple sessions
+        conn_process('analyses_dyn');
+    elseif inter_or_intra == 0
         fprintf('Skipping Dynamic FC: CONN does not yet support inter-subjects project (works on multiple sessions but not multiple independent subjects groups/conditions).\n');
-    %end
+    end
     % Save the new struct and results!
     if isfield(CONN_x,'filename'), conn save; end;
 end
