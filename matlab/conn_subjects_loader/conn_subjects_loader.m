@@ -13,7 +13,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.9.2
+% v0.9.3
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016 Stephen Larroque
@@ -127,7 +127,7 @@ end
 if length(path_to_roi_maps) > 0
     fprintf('ROIs maps detection...\n');
     % Get all the roi files
-    roi_maps = regex_files(path_to_roi_maps, '^.+\.nii$');
+    roi_maps = regex_files(path_to_roi_maps, '^.+\.(nii|hdr)$');
     % Extract the filenames, they will serve as the roi names in CONN
     roi_names = {};
     for r=1:length(roi_maps)
