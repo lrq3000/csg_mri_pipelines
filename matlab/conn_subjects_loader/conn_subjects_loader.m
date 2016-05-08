@@ -39,6 +39,7 @@ resume_job = 0; % resume from where the script was last stopped (ctrl-c or error
 fprintf('Note: data is expected to be already preprocessed\n(realignment/slicetiming/coregistration/segmentation/normalization/smoothing)\n');
 fprintf('Note2: this script expects a very specific directry tree layout\nfor your images (see script header comment). If not met,\nthis may produce errors like "Index exceeds matrix dimensions."\nwhen executing conn_batch(CONN_x).\n');
 fprintf('Note3: if in inter-subjects mode you get the error\n"Reference to non-existent field t. Error in spm_hrf", you have to\nedit spm_hrf.m to replace stats.fmri.t by stats.fmri.fmri_t .\n');
+fprintf('Note4: Voxel-to-Voxel analysis needs at least 2 subjects per condition/group!\n');
 
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
 bakpath = path; % backup the current path variable
