@@ -38,7 +38,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.3'
+__version__ = '0.4'
 
 import argparse
 import os
@@ -279,8 +279,14 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     for dirpath, filename in recwalk(unicode(rootfolderpath), topdown=False):  # IMPORTANT: need to supply a unicode path to os.walk in order to get back unicode filenames! Also need to walk the tree bottom-up (from leaf to root), else if we change the directories names before the dirs/files they contain, we won't find them anymore!
         count_files += 1
         if verbose: print("- Processing file %s\n" % os.path.join(dirpath, filename))
-        ascii_filename = unidecode(filename)  # converting unicode string to ascii (ie, convert accentuated characters to their non-accentuated counterparts)
-        if ascii_filename != filename:  # check that the filename/directory was not already ascii only
+        # convert unicode string to ascii (ie, convert accentuated characters to their non-accentuated counterparts)
+        ascii_filename = unidecode(filename)
+        # strip quotes and double quotes
+        remove_chars = '\'"`'
+        for c in remove_chars:
+            ascii_filename = ascii_filename.replace(c, '')
+        # check that the filename/directory was not already ascii only, if not, we rename it
+        if ascii_filename != filename and ascii_filename:
             if verbose: print("- Renaming non-ascii file/dir %s to %s\n" % (filename, ascii_filename))
             shutil.move(os.path.join(dirpath, filename), os.path.join(dirpath, ascii_filename))
             count_renamed_files += 1
