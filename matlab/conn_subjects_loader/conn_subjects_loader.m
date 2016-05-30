@@ -13,13 +13,19 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a
-% v0.9.4
+% v0.9.5
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016 Stephen Larroque
 % Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 % The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 % THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+%
+% TODO:
+% * Multi-datasets run: Accept third mode with both inter and intra, by setting number of sessions per subject, and root_path a vector of paths and inter_or_intra a vector of 0 and 1 (to define the mode for each dataset in root_path). Also must set TR per dataset.
+% * Try to have Dynamic FC for multi-datasets run.
+% * Add CSV reading to automatically input 2nd-level covariates like age or sex.
+% * save an example CONN_x into .mat to show the expected structure (useful if need to debug).
 %
 
 % ------ PARAMETERS HERE
@@ -231,6 +237,8 @@ if inter_or_intra == 0
     for c=1:length(conditions)
         CONN_x.Setup.subjects.groups = [CONN_x.Setup.subjects.groups ones(1, length(subjects{c}.names))*c];
     end
+    CONN_x.Setup.subjects.effect_names = {'AllSubjects'};
+    CONN_x.Setup.subjects.effects{1} = ones(1, subjects_total);
 elseif inter_or_intra == 1
     CONN_x.Setup.subjects.group_names = {'AllSubjects'};
     CONN_x.Setup.subjects.groups = ones(1, subjects_total);
@@ -350,11 +358,8 @@ if automate
     % Compute ROI-to-ROI 1st-level analysis
     conn_process('analyses_seedandroi');
     % Compute Dynamic FC (functional connectivity) 1st-level analysis
-    if inter_or_intra == 1  % CONN v16a cannot yet do inter subjects (across independent conditions/groups) dynamic FC, it can only work on intra-subject project over multiple sessions
-        conn_process('analyses_dyn');
-    elseif inter_or_intra == 0
-        fprintf('Skipping Dynamic FC: CONN does not yet support inter-subjects project (works on multiple sessions but not multiple independent subjects groups/conditions).\n');
-    end
+    % Trick to compute DFC is to use the backprojection technic: you need to create a condition and a 2nd-level group that includes all subjects across all conditions/sessions.
+    conn_process('analyses_dyn');
     % Save the new struct and results!
     if isfield(CONN_x,'filename'), conn save; end;
 end
