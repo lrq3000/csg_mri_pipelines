@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.9'
+__version__ = '0.9.2'
 
 import argparse
 import os
@@ -270,10 +270,12 @@ Description: Match paths using regular expression, and then generate a report. C
 This app is essentially a path matcher using regexp, and it then rewrites the path using regexp, so that you can reuse elements from input path to build the output path.
 This is very useful to reorganize folders for experiments, where scripts/softwares expect a specific directories layout in order to work.
 
-Note that the paths are compared against filepaths, not just folders (but of course you can match folders with regex, but remember when designing your regexp that it will compared against files paths, not directories).
+Note:paths are compared against filepaths, not just folders (but of course you can match folders with regex, but remember when designing your regexp that it will compared against files paths, not directories).
+Note2: also that the paths are relative to the rootpath (except if --show-fullpath) and that they are always unix style, even on Windows (for consistency on all platforms and to easily reuse regexp).
+Note3: partial matching regex is accepted, so you don't need to model the full filepath, only the part you need (eg, 'myfile' will match '/myfolder/sub/myfile-034.mat').
 
-Note: use --gui (without any other argument) to launch the experimental gui (needs Gooey library).
-Note2: can be used as a Python module to include in your scripts (set return_report=True).
+Note4: use --gui (without any other argument) to launch the experimental gui (needs Gooey library).
+Note5: can be used as a Python module to include in your scripts (set return_report=True).
     ''' % __version__
     ep = ''' '''
 
@@ -313,6 +315,8 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
                         help='Copy the matched input paths to the regex-substituted output paths.')
     main_parser.add_argument('-m', '--move', action='store_true', required=False, default=False,
                         help='Move the matched input paths to the regex-substituted output paths.')
+    main_parser.add_argument('-d', '--delete', action='store_true', required=False, default=False,
+                        help='Delete the matched files.')
 
     # Optional general arguments
     main_parser.add_argument('-t', '--test', action='store_true', required=False, default=False,
@@ -323,6 +327,8 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
                         help='Force overwriting the target path already exists. Note that by default, if a file already exist, without this option, it won\'t get overwritten and no message will be displayed.')
     main_parser.add_argument('--show_fullpath', action='store_true', required=False, default=False,
                         help='Show full paths instead of relative paths in the simulation.')
+    main_parser.add_argument('-ra', '--range', type=str, metavar='1:10-255', required=False, default=False,
+                        help='Range mode: match only the files with filenames containing numbers in the specified range. The format is: (regex-match-group-id):(range-start)-(range-end). regex-match-group-id is the id of the regular expression that will contain the numbers that must be compared to the range. range-end is inclusive.')
     main_parser.add_argument('--report', type=str, required=False, default='pathmatcher_report.txt', metavar='pathmatcher_report.txt',
                         help='Where to store the simulation report.')
     main_parser.add_argument('-l', '--log', metavar='/some/folder/filename.log', type=str, required=False,
@@ -345,11 +351,13 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
     regex_output = args.regex_output
     copy_mode = args.copy
     move_mode = args.move
+    delete_mode = args.delete
     test_flag = args.test
     yes_flag = args.yes
     force = args.force
     only_missing = not force
     show_fullpath = args.show_fullpath
+    path_range = args.range
     reportpath = args.report
     verbose = args.verbose
     silent = args.silent
@@ -379,6 +387,10 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
     try:
         regin = re.compile(str_to_raw(regex_input))
         regout = re.compile(str_to_raw(regex_output)) if regex_output else None
+        if path_range:  # parse the range format
+            temp = re.search(r'(\d+):(\d+)-(\d+)', path_range)
+            prange = {"group": int(temp.group(1)), "start": int(temp.group(2)), "end": int(temp.group(3))}
+            del temp
     except re.error as exc:
         ptee.write("Regular expression is not correct, please fix it! Here is the error stack:\n")
         ptee.write(traceback.format_exc())
@@ -401,6 +413,12 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
         relfilepath = path2unix(os.path.relpath(filepath, rootfolderpath)) # File relative path from the root (we truncate the rootfolderpath so that we can easily check the files later even if the absolute path is different)
         # Check if relative filepath matches the input regex
         if regin.search(relfilepath):  # Matched! We store it in the "to copy" files list
+            # If range mode enabled, check if the numbers in the filepath are in the specified range, else we skip this file
+            if path_range:
+                m = regin.search(relfilepath)
+                curval = int(m.group(prange['group']))
+                if not (prange['start'] <= curval <= prange['end']):
+                    continue
             # Compute the output filepath using output regex
             if outputpath:
                 newfilepath = regin.sub(regex_output, relfilepath) if regex_output else relfilepath
@@ -474,7 +492,7 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
                 showoutpath = file_op[1] if outputpath else None
 
             # Write into report file
-            reportfile.write("* %s %s %s %s %s" % (showinpath, "-->" if outputpath else "", showoutpath if outputpath else "", "[ALREADY_EXIST]" if conflict1 else '', "[CONFLICT]" if conflict2 else ''))
+            reportfile.write("* %s %s %s %s %s" % (showinpath, "-->" if (outputpath or delete_mode) else "", showoutpath if outputpath else "", "[ALREADY_EXIST]" if conflict1 else '', "[CONFLICT]" if conflict2 else ''))
             reportfile.write("\n")
     # Open the simulation report with the system's default text editor
     if not (yes_flag or return_report):  # if --yes is supplied, just skip question and apply!
@@ -482,7 +500,7 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
         open_with_default_app(reportpath)
 
     # == COPY/MOVE STEP
-    if (copy_mode or move_mode) and outputpath and files_list:
+    if files_list and ( delete_mode or ((copy_mode or move_mode) and outputpath) ):
         # -- USER NOTIFICATION AND VALIDATION
         # Notify user of conflicts
         ptee.write("\n")
@@ -506,9 +524,12 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
                 ptee.write("%s --> %s" % (infilepath, outfilepath))
             # Copy the file! (User previously accepted to apply the simulation)
             fullinpath = os.path.join(rootfolderpath, infilepath)
-            fulloutpath = os.path.join(rootoutpath, outfilepath)
-            copy_any(fullinpath, fulloutpath, only_missing=only_missing)  # copy file
-            if move_mode:  # if move mode, then delete the old file. Copy/delete is safer than move because we can ensure that the file is fully copied (metadata/stats included) before deleting the old
+            if outputpath:
+                fulloutpath = os.path.join(rootoutpath, outfilepath)
+                copy_any(fullinpath, fulloutpath, only_missing=only_missing)  # copy file
+                if move_mode:  # if move mode, then delete the old file. Copy/delete is safer than move because we can ensure that the file is fully copied (metadata/stats included) before deleting the old
+                    remove_if_exist(fullinpath)
+            if delete_mode:  # if delete mode, ensure that the original file is deleted!
                 remove_if_exist(fullinpath)
 
     # == RETURN AND END OF MAIN
