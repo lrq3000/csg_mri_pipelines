@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.0'
+__version__ = '1.0.2'
 
 import argparse
 import os
@@ -112,6 +112,11 @@ def str_to_raw(str):
         return str.decode('string_escape')
     except:  # Python 3
         return str.encode().decode('unicode_escape')
+
+def filestr_to_raw(str):
+    '''Convert a filepath to raw string only if resulting filepath exist'''
+    escaped = str_to_raw(str)
+    return escaped if os.path.exists(escaped) else str
 
 def fullpath(relpath):
     '''Relative path to absolute'''
@@ -295,7 +300,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
             if uchoice == False: continue
             #matlab.cd(os.path.dirname(file))  # FIXME: does not work...
             os.chdir(os.path.dirname(file))  # Workaround: Change Python and MATLAB's path to the folder where the anatomical file is, so that user just needs to click on it
-            matlab.spm_image('display', str_to_raw(file))  # Convert path to raw string to avoid \0 MATLAB string termination character
+            matlab.spm_image('display', filestr_to_raw(file))  # Convert path to raw string to avoid \0 MATLAB string termination character
 
     # == CHECK MULTIPLE IMAGES TOGETHER
     print("\n=> STEP3: SIDE-BY-SIDE CHECK MULTIPLE SUBJECTS")
