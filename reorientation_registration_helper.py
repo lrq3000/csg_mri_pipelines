@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 import argparse
 import os
@@ -374,10 +374,20 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 uchoice = ask_next(msg='Open next registration for condition %s, subject id %s? Enter to [c]ontinue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (cond, id))  # ask user if we load the next file?
                 if uchoice is None: break
                 if uchoice == False: continue
+                select_t2_nb = None  # for user to specify a specific T2 image
                 while 1:
-                    # Randomly choose one anatomical image (there should be only one anyway) and one functional image
-                    im_anat = random.choice(im_table[cond][id]['mprage'])
-                    im_func = random.choice(im_table[cond][id]['rest'])
+                    # Pick a T1 and T2 images for this subject
+                    if select_t2_nb is not None:
+                        # Pick a specific image specified by user
+                        im_table[cond][id]['mprage'].sort()  # first, sort the lists of files
+                        im_table[cond][id]['rest'].sort()
+                        im_anat = im_table[cond][id]['mprage'][select_t2_nb]
+                        im_func = im_table[cond][id]['rest'][select_t2_nb]
+                        print(im_func)
+                    else:
+                        # Randomly choose one anatomical image (there should be only one anyway) and one functional image
+                        im_anat = random.choice(im_table[cond][id]['mprage'])
+                        im_func = random.choice(im_table[cond][id]['rest'])
                     if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
                     # Build full absolute path for MATLAB
                     im_anat = os.path.join(rootfolderpath, im_anat)
@@ -386,9 +396,15 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                     matlab.spm_check_registration(im_anat, im_func)
                     # Allow user to select another image if not enough contrast
-                    uchoice = raw_input("Not enough contrasts? Want to load another T2 image? [R]andomly select another T2, Enter to [c]ontinue to next subject: ")
-                    if len(uchoice) == 0 or uchoice.lower() == 'c':  # redo the loop if the user entered any character
+                    uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last], Enter to [c]ontinue to next subject: ", customchoices=['r', 'first', 'last'])
+                    if uchoice == True:  # continue if pressed enter or c, or redo the loop if the user entered any unrecognized choice (to avoid skipping subjects when in fact the user wants to continue working on it)
                         break
+                    elif uchoice == 'r':
+                        select_t2_nb = None
+                    elif uchoice == 'first':
+                        select_t2_nb = 0
+                    elif uchoice == 'last':
+                        select_t2_nb = -1
 
     # == END: now user must execute the standard preprocessing script
     print("\nAll done. You should now use the standard preprocessing script. Quitting.")
