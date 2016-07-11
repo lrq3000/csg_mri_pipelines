@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.0.3'
+__version__ = '1.0.4'
 
 import argparse
 import os
@@ -101,6 +101,8 @@ def ask_next(filepath='', msg=None, customchoices=[]):
             return False
         elif len(user_choice) == 0 or user_choice.lower() == 'c':
             return True
+        elif 'int' in customchoices and is_int(user_choice):
+            return int(user_choice)
         elif user_choice.lower() in customchoices:
             return user_choice.lower()
         else:
@@ -125,9 +127,17 @@ def fullpath(relpath):
     return os.path.abspath(os.path.expanduser(relpath))
 
 def grouper(n, iterable, fillvalue=None):
-    "grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx"
+    '''grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx'''
+    # From Python documentation
     args = [iter(iterable)] * n
     return izip_longest(fillvalue=fillvalue, *args)
+
+def is_int(s):
+    try: 
+        int(s)
+        return True
+    except ValueError:
+        return False
 
 
 
@@ -381,9 +391,8 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                         # Pick a specific image specified by user
                         im_table[cond][id]['mprage'].sort()  # first, sort the lists of files
                         im_table[cond][id]['rest'].sort()
-                        im_anat = im_table[cond][id]['mprage'][select_t2_nb]
+                        im_anat = im_table[cond][id]['mprage'][0]
                         im_func = im_table[cond][id]['rest'][select_t2_nb]
-                        print(im_func)
                     else:
                         # Randomly choose one anatomical image (there should be only one anyway) and one functional image
                         im_anat = random.choice(im_table[cond][id]['mprage'])
@@ -396,15 +405,21 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                     matlab.spm_check_registration(im_anat, im_func)
                     # Allow user to select another image if not enough contrast
-                    uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last], Enter to [c]ontinue to next subject: ", customchoices=['r', 'first', 'last'])
-                    if uchoice == True:  # continue if pressed enter or c, or redo the loop if the user entered any unrecognized choice (to avoid skipping subjects when in fact the user wants to continue working on it)
+                    uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i), Enter to [c]ontinue to next subject: " % (len(im_table[cond][id]['rest'])-1), customchoices=['r', 'first', 'last', 'int'])
+                    if uchoice is True:  # continue if pressed enter or c
                         break
-                    elif uchoice == 'r':
+                    elif uchoice == 'r':  # select a random image
                         select_t2_nb = None
-                    elif uchoice == 'first':
+                    elif uchoice == 'first':  # select first image
                         select_t2_nb = 0
-                    elif uchoice == 'last':
+                    elif uchoice == 'last':  # select last image
                         select_t2_nb = -1
+                    elif is_int(uchoice) and uchoice is not False:  # Select specific image by number
+                        select_t2_nb = int(uchoice)
+                        # Check the number is between bounds, else select a random image
+                        if not (0 <= select_t2_nb <= len(im_table[cond][id]['rest'])-1):
+                            select_t2_nb = None
+                        print("Number : %i" % select_t2_nb)
 
     # == END: now user must execute the standard preprocessing script
     print("\nAll done. You should now use the standard preprocessing script. Quitting.")
