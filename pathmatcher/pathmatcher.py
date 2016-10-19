@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.9.2'
+__version__ = '0.9.3'
 
 import argparse
 import os
@@ -304,7 +304,7 @@ Note5: can be used as a Python module to include in your scripts (set return_rep
     main_parser.add_argument('-i', '--input', metavar='/some/path', type=str, required=True,
                         help='Path to the input folder', **widget_dir)
     main_parser.add_argument('-ri', '--regex_input', metavar=r'sub[^/\]*/(\d+)', type=str, required=True,
-                        help='Regex to match input paths. Must be defined relatively from --input folder.')
+                        help=r'Regex to match input paths. Must be defined relatively from --input folder. To match any directory, use [^/\]* or the alias \dir.')
 
     # Optional output/copy mode
     main_parser.add_argument('-o', '--output', metavar='/new/path', type=str, required=False, default=None,
@@ -381,6 +381,11 @@ Note5: can be used as a Python module to include in your scripts (set return_rep
         sys.stderr = Tee(args.log, 'a', nostdout=silent)
     else:
         ptee = Tee(nostdout=silent)
+    
+    # -- Preprocess regular expression to add aliases
+    # Directory alias
+    regex_input = regex_input.replace('\dir', '[^\/]*')
+    regex_output = regex_output.replace('\dir', '[^\/]*') if regex_output else regex_output
 
     #### Main program
     # Test if regular expressions are correct syntactically
