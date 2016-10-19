@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.9.3'
+__version__ = '0.9.4'
 
 import argparse
 import os
@@ -270,12 +270,17 @@ Description: Match paths using regular expression, and then generate a report. C
 This app is essentially a path matcher using regexp, and it then rewrites the path using regexp, so that you can reuse elements from input path to build the output path.
 This is very useful to reorganize folders for experiments, where scripts/softwares expect a specific directories layout in order to work.
 
-Note:paths are compared against filepaths, not just folders (but of course you can match folders with regex, but remember when designing your regexp that it will compared against files paths, not directories).
-Note2: also that the paths are relative to the rootpath (except if --show-fullpath) and that they are always unix style, even on Windows (for consistency on all platforms and to easily reuse regexp).
-Note3: partial matching regex is accepted, so you don't need to model the full filepath, only the part you need (eg, 'myfile' will match '/myfolder/sub/myfile-034.mat').
+Advices
+-------
+- Filepath comparison: Paths are compared against filepaths, not just folders (but of course you can match folders with regex, but remember when designing your regexp that it will compared against files paths, not directories).
+- Relative filepath: Paths are relative to the rootpath (except if --show-fullpath) and that they are always unix style, even on Windows (for consistency on all platforms and to easily reuse regexp).
+- Partial matching: partial matching regex is accepted, so you don't need to model the full filepath, only the part you need (eg, 'myfile' will match '/myfolder/sub/myfile-034.mat').
+- Unix filepaths: on all platforms, including Windows, paths will be in unix format (except if you set --show_fullpath). It makes things simpler for you to make crossplatform regex patterns.
+- Use [^/]+ to match any file/folder in the filepath: because paths are always unix-like, you can use [^/]+ to match any part of the filepath. Eg, "([^/]+)/([^/]+)/data/mprage/.+\.(img|hdr|txt)" will match "UWS/John_Doe/data/mprage/12345_t1_mprage_98782.hdr".
+- Split your big task in several smaller, simpler subtasks: instead of trying to do a regex that match T1, T2, DTI, everything at the same time, try to focus on only one modality at a time and execute them using multiple regex queries: eg, move first structural images, then functional images, then dti, etc. instead of all at once.
+- Python module: this library can be used as a Python module to include in your scripts (just call `main(return_report=True)`).
 
-Note4: use --gui (without any other argument) to launch the experimental gui (needs Gooey library).
-Note5: can be used as a Python module to include in your scripts (set return_report=True).
+Note: use --gui (without any other argument) to launch the experimental gui (needs Gooey library).
     ''' % __version__
     ep = ''' '''
 
@@ -303,14 +308,14 @@ Note5: can be used as a Python module to include in your scripts (set return_rep
     # Required arguments
     main_parser.add_argument('-i', '--input', metavar='/some/path', type=str, required=True,
                         help='Path to the input folder', **widget_dir)
-    main_parser.add_argument('-ri', '--regex_input', metavar=r'sub[^/\]*/(\d+)', type=str, required=True,
-                        help=r'Regex to match input paths. Must be defined relatively from --input folder. To match any directory, use [^/\]* or the alias \dir.')
+    main_parser.add_argument('-ri', '--regex_input', metavar=r'"sub[^/]+/(\d+)"', type=str, required=True,
+                        help=r'Regex to match input paths. Must be defined relatively from --input folder. Do not forget to enclose it in double quotes (and not single)! To match any directory, use [^/\]* or the alias \dir.')
 
     # Optional output/copy mode
     main_parser.add_argument('-o', '--output', metavar='/new/path', type=str, required=False, default=None,
                         help='Path to the output folder (where file will get copied over if --copy)', **widget_dir)
-    main_parser.add_argument('-ro', '--regex_output', metavar=r'newsub/\1', type=str, required=False, default=None,
-                        help='Regex to substitute input paths to convert to output paths. Must be defined relatively from --output folder. If not provided but --output is specified, will keep the same directory layout as input (useful to extract specific files without changing layout).')
+    main_parser.add_argument('-ro', '--regex_output', metavar=r'"newsub/\1"', type=str, required=False, default=None,
+                        help='Regex to substitute input paths to convert to output paths. Must be defined relatively from --output folder. If not provided but --output is specified, will keep the same directory layout as input (useful to extract specific files without changing layout). Do not forget to enclose it in double quotes!')
     main_parser.add_argument('-c', '--copy', action='store_true', required=False, default=False,
                         help='Copy the matched input paths to the regex-substituted output paths.')
     main_parser.add_argument('-m', '--move', action='store_true', required=False, default=False,
@@ -367,6 +372,12 @@ Note5: can be used as a Python module to include in your scripts (set return_rep
         rootfolderpath = os.path.dirname(inputpath)
     if outputpath and os.path.isfile(outputpath): # if inputpath is a single file (instead of a folder), then define the rootfolderpath as the parent directory (for correct relative path generation, else it will also truncate the filename!)
         rootoutpath = os.path.dirname(outputpath)
+
+    # Strip trailing slashes to ensure we correctly format paths afterward
+    if rootfolderpath:
+        rootfolderpath = rootfolderpath.rstrip('/\\')
+    if rootoutpath:
+        rootoutpath = rootoutpath.rstrip('/\\')
 
     if not os.path.isdir(rootfolderpath):
         raise NameError('Specified input path does not exist. Please check the specified path')
