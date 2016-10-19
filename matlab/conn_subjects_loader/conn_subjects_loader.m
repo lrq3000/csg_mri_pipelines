@@ -39,6 +39,7 @@ func_smoothed_prefix = 's8rwa'; % prefix of the smoothed motion corrected images
 inter_or_intra = 0; % 0 for inter subjects analysis (each condition = a different group in covariates 2nd level) - 1 for intra subject analysis (each condition = a different session, only one subjects group)
 automate = 0; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
 resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted. Note that resume can also be used to add new subjects without reprocessing old ones.
+run_dynamicfc = 1; % run Dynamic Functional Connectivity analysis? BEWARE: it may fail. This script tries to setup the experiment correctly so that DFC runs, but it may still fail for no obvious reason!
 % ------ END OF PARAMETERS
 
 % Notes and warnings
@@ -359,7 +360,7 @@ if automate
     conn_process('analyses_seedandroi');
     % Compute Dynamic FC (functional connectivity) 1st-level analysis
     % Trick to compute DFC is to use the backprojection technic: you need to create a condition and a 2nd-level group that includes all subjects across all conditions/sessions.
-    conn_process('analyses_dyn');
+    if run_dynamicfc == 1, conn_process('analyses_dyn'); end;
     % Save the new struct and results!
     if isfield(CONN_x,'filename'), conn save; end;
 end
