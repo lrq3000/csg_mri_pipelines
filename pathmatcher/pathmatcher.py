@@ -208,7 +208,7 @@ def copy_any(src, dst, only_missing=False, symlink=False):  # pragma: no cover
                     srcfile = os.path.join(dirpath, filepath)
                     relpath = os.path.relpath(srcfile, src)
                     dstfile = os.path.join(dst, relpath)
-                    if (only_missing and not os.path.exists(dstfile)) or symlink:
+                    if not only_missing or not os.path.exists(dstfile):  # only_missing -> dstfile must not exist
                         create_dir_if_not_exist(os.path.dirname(dstfile))
                         if symlink:
                             symbolic_copy(srcfile, dstfile)
