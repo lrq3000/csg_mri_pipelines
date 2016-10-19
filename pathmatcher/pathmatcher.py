@@ -181,7 +181,8 @@ def create_dir_if_not_exist(path):  # pragma: no cover
         os.makedirs(path)
 
 def copy_any(src, dst, only_missing=False, symlink=False):  # pragma: no cover
-    """Copy a file or a directory tree, deleting the destination before processing"""
+    """Copy a file or a directory tree, deleting the destination before processing.
+    If symlink, then the copy will only create symbolic links to the original files."""
     def real_copy(srcfile, dstfile):
         """Copy a file or a folder and keep stats"""
         shutil.copyfile(srcfile, dstfile)
@@ -198,15 +199,16 @@ def copy_any(src, dst, only_missing=False, symlink=False):  # pragma: no cover
         # If it's a folder, recursively copy its content
         if os.path.isdir(src):
             # If we copy everything, we already removed the destination folder, so we can just copy it all
-            if not only_missing:
-                shutil.copytree(src, dst, symlinks=symlink, ignore=None)
+            if not only_missing and not symlink:
+                shutil.copytree(src, dst, symlinks=False, ignore=None)
             # Else we will check each file and add only new ones (present in source but absent from destination)
+            # Also if we want to only symlink all files, shutil.copytree() does not support that, so we do it here
             else:
                 for dirpath, filepath in recwalk(src):
                     srcfile = os.path.join(dirpath, filepath)
                     relpath = os.path.relpath(srcfile, src)
                     dstfile = os.path.join(dst, relpath)
-                    if not os.path.exists(dstfile):
+                    if (only_missing and not os.path.exists(dstfile)) or symlink:
                         create_dir_if_not_exist(os.path.dirname(dstfile))
                         if symlink:
                             symbolic_copy(srcfile, dstfile)
