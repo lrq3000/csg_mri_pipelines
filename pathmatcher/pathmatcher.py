@@ -359,7 +359,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     main_parser.add_argument('-ra', '--range', type=str, metavar='1:10-255', required=False, default=False,
                         help='Range mode: match only the files with filenames containing numbers in the specified range. The format is: (regex-match-group-id):(range-start)-(range-end). regex-match-group-id is the id of the regular expression that will contain the numbers that must be compared to the range. range-end is inclusive.')
     main_parser.add_argument('--report', type=str, required=False, default='pathmatcher_report.txt', metavar='pathmatcher_report.txt',
-                        help='Where to store the simulation report.')
+                        help='Where to store the simulation report (default: pwd = current working dir).')
     main_parser.add_argument('-l', '--log', metavar='/some/folder/filename.log', type=str, required=False,
                         help='Path to the log file. (Output will be piped to both the stdout and the log file)', **widget_filesave)
     main_parser.add_argument('-v', '--verbose', action='store_true', required=False, default=False,
