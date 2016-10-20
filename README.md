@@ -44,26 +44,101 @@ Note2: can be used as a Python module to include in your scripts (set return_rep
 
 optional arguments:
   -h, --help            show this help message and exit
+usage: pathmatcher.py [-h] -i /some/path -ri "sub[^/]+/\d+" [-o /new/path]
+                      [-ro "newsub/\1"] [-c] [-s] [-m] [-d] [-t] [-y] [-f]
+                      [--show_fullpath] [-ra 1:10-255]
+                      [--report pathmatcher_report.txt]
+                      [-l /some/folder/filename.log] [-v] [--silent]
+
+Regex Path Matcher v0.9.5
+Description: Match paths using regular expression, and then generate a report. C
+an also substitute using regex to generate output paths. A copy mode is also pro
+vided to allow the copy of files from input to output paths.
+This app is essentially a path matcher using regexp, and it then rewrites the pa
+th using regexp, so that you can reuse elements from input path to build the out
+put path.
+This is very useful to reorganize folders for experiments, where scripts/softwar
+es expect a specific directories layout in order to work.
+
+Advices
+-------
+- Filepath comparison: Paths are compared against filepaths, not just folders (b
+ut of course you can match folders with regex, but remember when designing your
+regexp that it will compared against files paths, not directories).
+- Relative filepath: Paths are relative to the rootpath (except if --show-fullpa
+th) and that they are always unix style, even on Windows (for consistency on all
+ platforms and to easily reuse regexp).
+- Partial matching: partial matching regex is accepted, so you don't need to mod
+el the full filepath, only the part you need (eg, 'myfile' will match '/myfolder
+/sub/myfile-034.mat').
+- Unix filepaths: on all platforms, including Windows, paths will be in unix for
+mat (except if you set --show_fullpath). It makes things simpler for you to make
+ crossplatform regex patterns.
+- Use [^/]+ to match any file/folder in the filepath: because paths are always u
+nix-like, you can use [^/]+ to match any part of the filepath. Eg, "([^/]+)/([^/
+]+)/data/mprage/.+\.(img|hdr|txt)" will match "UWS/John_Doe/data/mprage/12345_t1
+_mprage_98782.hdr".
+- Split your big task in several smaller, simpler subtasks: instead of trying to
+ do a regex that match T1, T2, DTI, everything at the same time, try to focus on
+ only one modality at a time and execute them using multiple regex queries: eg,
+move first structural images, then functional images, then dti, etc. instead of
+all at once.
+- Python module: this library can be used as a Python module to include in your
+scripts (just call `main(return_report=True)`).
+
+Note: use --gui (without any other argument) to launch the experimental gui (nee
+ds Gooey library).
+
+
+optional arguments:
+  -h, --help            show this help message and exit
   -i /some/path, --input /some/path
                         Path to the input folder
-  -ri sub[^/\]*/(\d+), --regex_input sub[^/\]*/(\d+)
-                        Regex to match input paths. Must be defined relatively from --input folder.
+  -ri "sub[^/]+/(\d+)", --regex_input "sub[^/]+/(\d+)"
+                        Regex to match input paths. Must be defined relatively f
+rom --input folder. Do not forget to enclose it in double quotes (and not single
+)! To match any directory, use [^/\]* or the alias \dir.
   -o /new/path, --output /new/path
-                        Path to the output folder (where file will get copied over if --copy)
-  -ro newsub/\1, --regex_output newsub/\1
-                        Regex to substitute input paths to convert to output paths. Must be defined relatively from --output folder. If not provided but --output is specified, will keep the same directory layout as input (useful to extract specific files without changing layout).
-  -c, --copy            Copy the matched input paths to the regex-substituted output paths.
-  -m, --move            Move the matched input paths to the regex-substituted output paths.
-  -t, --test            Regex test mode: Stop after the first matched file and show the result of substitution. Useful to quickly check if the regex patterns are ok.
-  -y, --yes             Automatically accept the simulation and apply changes (good for batch processing and command chaining).
-  -f, --force           Force overwriting the target path already exists. Note that by default, if a file already exist, without this option, it won't get overwritten and no message will be displayed.
-  --show_fullpath       Show full paths instead of relative paths in the simulation.
+                        Path to the output folder (where file will get copied ov
+er if --copy)
+  -ro "newsub/\1", --regex_output "newsub/\1"
+                        Regex to substitute input paths to convert to output pat
+hs. Must be defined relatively from --output folder. If not provided but --outpu
+t is specified, will keep the same directory layout as input (useful to extract
+specific files without changing layout). Do not forget to enclose it in double q
+uotes!
+  -c, --copy            Copy the matched input paths to the regex-substituted ou
+tput paths.
+  -s, --symlink         Copy with a symbolic/soft link the matched input paths t
+o the regex-substituted output paths (works only on Linux).
+  -m, --move            Move the matched input paths to the regex-substituted ou
+tput paths.
+  -d, --delete          Delete the matched files.
+  -t, --test            Regex test mode: Stop after the first matched file and s
+how the result of substitution. Useful to quickly check if the regex patterns ar
+e ok.
+  -y, --yes             Automatically accept the simulation and apply changes (g
+ood for batch processing and command chaining).
+  -f, --force           Force overwriting the target path already exists. Note t
+hat by default, if a file already exist, without this option, it won't get overw
+ritten and no message will be displayed.
+  --show_fullpath       Show full paths instead of relative paths in the simulat
+ion.
+  -ra 1:10-255, --range 1:10-255
+                        Range mode: match only the files with filenames containi
+ng numbers in the specified range. The format is: (regex-match-group-id):(range-
+start)-(range-end). regex-match-group-id is the id of the regular expression tha
+t will contain the numbers that must be compared to the range. range-end is incl
+usive.
   --report pathmatcher_report.txt
-                        Where to store the simulation report.
+                        Where to store the simulation report (default: pwd = cur
+rent working dir).
   -l /some/folder/filename.log, --log /some/folder/filename.log
-                        Path to the log file. (Output will be piped to both the stdout and the log file)
+                        Path to the log file. (Output will be piped to both the
+stdout and the log file)
   -v, --verbose         Verbose mode (show more output).
-  --silent              No console output (but if --log specified, the log will still be saved in the specified file).
+  --silent              No console output (but if --log specified, the log will
+still be saved in the specified file).
 ```
 
 ### Libraries
