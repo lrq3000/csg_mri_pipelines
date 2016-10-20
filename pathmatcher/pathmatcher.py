@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.9.4'
+__version__ = '0.9.5'
 
 import argparse
 import os
@@ -90,6 +90,7 @@ class More(object):
             raw_input("Press <Enter> for more")
 
 def open_with_default_app(filepath):
+    """Open the report with the default text editor"""
     if sys.platform == "linux" or sys.platform == "linux2":
         os.system('%s %s' % (os.getenv('EDITOR'), filepath))
     elif sys.platform == "win32":
@@ -98,14 +99,14 @@ def open_with_default_app(filepath):
         os.system("open "+filepath)
 
 def str_to_raw(str):
-    '''Convert string received from commandline to raw (unescaping the string)'''
+    """Convert string received from commandline to raw (unescaping the string)"""
     try:  # Python 2
         return str.decode('string_escape')
     except:  # Python 3
         return str.encode().decode('unicode_escape')
 
 def is_file(dirname):
-    '''Checks if a path is an actual file that exists'''
+    """Checks if a path is an actual file that exists"""
     if not os.path.isfile(dirname):
         msg = "{0} is not an existing file".format(dirname)
         raise ArgumentTypeError(msg)
@@ -113,7 +114,7 @@ def is_file(dirname):
         return dirname
 
 def is_dir(dirname):
-    '''Checks if a path is an actual directory that exists'''
+    """Checks if a path is an actual directory that exists"""
     if not os.path.isdir(dirname):
         msg = "{0} is not a directory".format(dirname)
         raise ArgumentTypeError(msg)
@@ -121,7 +122,7 @@ def is_dir(dirname):
         return dirname
 
 def is_dir_or_file(dirname):
-    '''Checks if a path is an actual directory that exists or a file'''
+    """Checks if a path is an actual directory that exists or a file"""
     if not os.path.isdir(dirname) and not os.path.isfile(dirname):
         msg = "{0} is not a directory nor a file".format(dirname)
         raise ArgumentTypeError(msg)
@@ -129,13 +130,13 @@ def is_dir_or_file(dirname):
         return dirname
 
 def fullpath(relpath):
-    '''Relative path to absolute'''
+    """Relative path to absolute"""
     if (type(relpath) is object or hasattr(relpath, 'read')): # relpath is either an object or file-like, try to get its name
         relpath = relpath.name
     return os.path.abspath(os.path.expanduser(relpath))
 
 def recwalk(inputpath, sorting=True):
-    '''Recursively walk through a folder. This provides a mean to flatten out the files restitution (necessary to show a progress bar). This is a generator.'''
+    """Recursively walk through a folder. This provides a mean to flatten out the files restitution (necessary to show a progress bar). This is a generator."""
     # If it's only a single file, return this single file
     if os.path.isfile(inputpath):
         abs_path = fullpath(inputpath)
@@ -150,8 +151,8 @@ def recwalk(inputpath, sorting=True):
                 yield (dirpath, filename) # return directory (full path) and filename
 
 def path2unix(path, nojoin=False, fromwinpath=False):
-    '''From a path given in any format, converts to posix path format
-    fromwinpath=True forces the input path to be recognized as a Windows path (useful on Unix machines to unit test Windows paths)'''
+    """From a path given in any format, converts to posix path format
+    fromwinpath=True forces the input path to be recognized as a Windows path (useful on Unix machines to unit test Windows paths)"""
     if not path:
         return path
     if fromwinpath:
@@ -179,28 +180,48 @@ def create_dir_if_not_exist(path):  # pragma: no cover
     if not os.path.exists(path):
         os.makedirs(path)
 
-def copy_any(src, dst, only_missing=False):  # pragma: no cover
-    """Copy a file or a directory tree, deleting the destination before processing"""
+def copy_any(src, dst, only_missing=False, symlink=False):  # pragma: no cover
+    """Copy a file or a directory tree, deleting the destination before processing.
+    If symlink, then the copy will only create symbolic links to the original files."""
+    def real_copy(srcfile, dstfile):
+        """Copy a file or a folder and keep stats"""
+        shutil.copyfile(srcfile, dstfile)
+        shutil.copystat(srcfile, dstfile)
+    def symbolic_copy(srcfile, dstfile):
+        """Create a symlink (symbolic/soft link) instead of a real copy"""
+        os.symlink(srcfile, dstfile)
+
+    # Delete destination folder/file if it exists
     if not only_missing:
         remove_if_exist(dst)
+    # Continue only if source exists
     if os.path.exists(src):
+        # If it's a folder, recursively copy its content
         if os.path.isdir(src):
-            if not only_missing:
+            # If we copy everything, we already removed the destination folder, so we can just copy it all
+            if not only_missing and not symlink:
                 shutil.copytree(src, dst, symlinks=False, ignore=None)
+            # Else we will check each file and add only new ones (present in source but absent from destination)
+            # Also if we want to only symlink all files, shutil.copytree() does not support that, so we do it here
             else:
                 for dirpath, filepath in recwalk(src):
                     srcfile = os.path.join(dirpath, filepath)
                     relpath = os.path.relpath(srcfile, src)
                     dstfile = os.path.join(dst, relpath)
-                    if not os.path.exists(dstfile):
+                    if not only_missing or not os.path.exists(dstfile):  # only_missing -> dstfile must not exist
                         create_dir_if_not_exist(os.path.dirname(dstfile))
-                        shutil.copyfile(srcfile, dstfile)
-                        shutil.copystat(srcfile, dstfile)
+                        if symlink:
+                            symbolic_copy(srcfile, dstfile)
+                        else:
+                            real_copy(srcfile, dstfile)
             return True
+        # Else it is a single file, copy the file
         elif os.path.isfile(src) and (not only_missing or not os.path.exists(dst)):
             create_dir_if_not_exist(os.path.dirname(dst))
-            shutil.copyfile(src, dst)
-            shutil.copystat(src, dst)
+            if symlink:
+                symbolic_copy(src, dst)
+            else:
+                real_copy(src, dst)
             return True
     return False
 
@@ -232,7 +253,7 @@ def conditional_decorator(flag, dec):  # pragma: no cover
     return decorate
 
 def check_gui_arg():  # pragma: no cover
-    '''Check that the --gui argument was passed, and if true, we remove the --gui option and replace by --gui_launched so that Gooey does not loop infinitely'''
+    """Check that the --gui argument was passed, and if true, we remove the --gui option and replace by --gui_launched so that Gooey does not loop infinitely"""
     if len(sys.argv) > 1 and sys.argv[1] == '--gui':
         # DEPRECATED since Gooey automatically supply a --ignore-gooey argument when calling back the script for processing
         #sys.argv[1] = '--gui_launched' # CRITICAL: need to remove/replace the --gui argument, else it will stay in memory and when Gooey will call the script again, it will be stuck in an infinite loop calling back and forth between this script and Gooey. Thus, we need to remove this argument, but we also need to be aware that Gooey was called so that we can call gooey.GooeyParser() instead of argparse.ArgumentParser() (for better fields management like checkboxes for boolean arguments). To solve both issues, we replace the argument --gui by another internal argument --gui_launched.
@@ -241,7 +262,7 @@ def check_gui_arg():  # pragma: no cover
         return False
 
 def AutoGooey(fn):  # pragma: no cover
-    '''Automatically show a Gooey GUI if --gui is passed as the first argument, else it will just run the function as normal'''
+    """Automatically show a Gooey GUI if --gui is passed as the first argument, else it will just run the function as normal"""
     if check_gui_arg():
         return gooey.Gooey(fn)
     else:
@@ -305,6 +326,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
         widget_filesave = {}
         widget_file = {}
         widget_text = {}
+
     # Required arguments
     main_parser.add_argument('-i', '--input', metavar='/some/path', type=str, required=True,
                         help='Path to the input folder', **widget_dir)
@@ -318,6 +340,8 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
                         help='Regex to substitute input paths to convert to output paths. Must be defined relatively from --output folder. If not provided but --output is specified, will keep the same directory layout as input (useful to extract specific files without changing layout). Do not forget to enclose it in double quotes!')
     main_parser.add_argument('-c', '--copy', action='store_true', required=False, default=False,
                         help='Copy the matched input paths to the regex-substituted output paths.')
+    main_parser.add_argument('-s', '--symlink', action='store_true', required=False, default=False,
+                        help='Copy with a symbolic/soft link the matched input paths to the regex-substituted output paths (works only on Linux).')
     main_parser.add_argument('-m', '--move', action='store_true', required=False, default=False,
                         help='Move the matched input paths to the regex-substituted output paths.')
     main_parser.add_argument('-d', '--delete', action='store_true', required=False, default=False,
@@ -335,7 +359,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     main_parser.add_argument('-ra', '--range', type=str, metavar='1:10-255', required=False, default=False,
                         help='Range mode: match only the files with filenames containing numbers in the specified range. The format is: (regex-match-group-id):(range-start)-(range-end). regex-match-group-id is the id of the regular expression that will contain the numbers that must be compared to the range. range-end is inclusive.')
     main_parser.add_argument('--report', type=str, required=False, default='pathmatcher_report.txt', metavar='pathmatcher_report.txt',
-                        help='Where to store the simulation report.')
+                        help='Where to store the simulation report (default: pwd = current working dir).')
     main_parser.add_argument('-l', '--log', metavar='/some/folder/filename.log', type=str, required=False,
                         help='Path to the log file. (Output will be piped to both the stdout and the log file)', **widget_filesave)
     main_parser.add_argument('-v', '--verbose', action='store_true', required=False, default=False,
@@ -355,6 +379,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     regex_input = args.regex_input
     regex_output = args.regex_output
     copy_mode = args.copy
+    symlink_mode = args.symlink
     move_mode = args.move
     delete_mode = args.delete
     test_flag = args.test
@@ -382,8 +407,11 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     if not os.path.isdir(rootfolderpath):
         raise NameError('Specified input path does not exist. Please check the specified path')
 
-    if (copy_mode or move_mode) and not outputpath:
-        raise ValueError('--copy specified but no --output !')
+    if sum([1 if elt == True else 0 for elt in [copy_mode, symlink_mode, move_mode, delete_mode]]) > 1:
+        raise ValueError('Cannot set multiple modes simultaneously, please choose only one!')
+
+    if (copy_mode or symlink_mode or move_mode) and not outputpath:
+        raise ValueError('--copy or --symlink or --move specified but no --output !')
 
     # -- Configure the log file if enabled (ptee.write() will write to both stdout/console and to the log file)
     if args.log:
@@ -516,7 +544,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
         open_with_default_app(reportpath)
 
     # == COPY/MOVE STEP
-    if files_list and ( delete_mode or ((copy_mode or move_mode) and outputpath) ):
+    if files_list and ( delete_mode or ((copy_mode or symlink_mode or move_mode) and outputpath) ):
         # -- USER NOTIFICATION AND VALIDATION
         # Notify user of conflicts
         ptee.write("\n")
@@ -542,7 +570,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
             fullinpath = os.path.join(rootfolderpath, infilepath)
             if outputpath:
                 fulloutpath = os.path.join(rootoutpath, outfilepath)
-                copy_any(fullinpath, fulloutpath, only_missing=only_missing)  # copy file
+                copy_any(fullinpath, fulloutpath, only_missing=only_missing, symlink=True if symlink_mode else False)  # copy file
                 if move_mode:  # if move mode, then delete the old file. Copy/delete is safer than move because we can ensure that the file is fully copied (metadata/stats included) before deleting the old
                     remove_if_exist(fullinpath)
             if delete_mode:  # if delete mode, ensure that the original file is deleted!
