@@ -31,7 +31,7 @@ usage: pathmatcher.py [-h] -i /some/path -ri sub[^/\]*/\d+ [-o /new/path]
                       [--show_fullpath] [--report pathmatcher_report.txt]
                       [-l /some/folder/filename.log] [-v] [--silent]
 
-Regex Path Matcher v0.9
+Regex Path Matcher v0.9.5
 Description: Match paths using regular expression, and then generate a report. Can also substitute using regex to generate output paths. A copy mode is also provided to allow the copy of files from input to output paths.
 This app is essentially a path matcher using regexp, and it then rewrites the path using regexp, so that you can reuse elements from input path to build the output path.
 This is very useful to reorganize folders for experiments, where scripts/softwares expect a specific directories layout in order to work.
@@ -81,6 +81,89 @@ optional arguments:
 * scandir (for faster file walking and simulation report)
 * Gooey (for gui)
 
+### Tutorial
+
+Here is a short introduction in the usage of pathmatcher.py.
+
+The most important trick to use pathmatcher.py efficiently that you should remember is this one: try to break operations over multiple commands. Indeed, it's simpler to match anatomical first, then functional, then dwi, etc... Rather than trying to match and reorder them all in only one command (which is possible but hard, for exactly the same result!).
+
+Let's take a concrete example: we are going to reorganize the NIfTI files from the [ABIDE I dataset](http://fcon_1000.projects.nitrc.org/indi/abide/) to the [BIDS scheme](http://bids.neuroimaging.io/).
+
+To do that, first create a directory anywhere you want (we will call this directory the "root directory", and unzip inside all ABIDE I dataset in one folder "ABIDE" (just "unzip here" the ABIDE I archives and this will create the `ABIDE` folder with the expected scheme). Then, inside the root directory, create another folder `ABIDE-BIDS` just beside the `ABIDE` folder. Now, open a terminal/console, and `cd` to the root directory, where there are now two subdirectories: "ABIDE" with ABIDE1 data, and `ABIDE-BIDS` that is empty.
+
+Now, in the commandline, execute the two following commands:
+
+```python
+python pathmatcher.py -ri "Caltech_([0-9]+)/\dir/scans/anat/resources/NIfTI/files/mprage.nii.gz" -ro "sub-\1/anat/sub-\1_T1w.nii.gz" -i ABIDE/ -o ABIDE-BIDS/ -c
+
+python pathmatcher.py -ri "Caltech_([0-9]+)/\dir/scans/rest/resources/NIfTI/files/rest.nii.gz" -ro "sub-\1/func/sub-\1_task-rest_bold.nii.gz" -i ABIDE/ -o ABIDE-BIDS/ -c
+```
+
+Where `-i = --input` (base input directory), `-o = --output` (base output directory where files will get copied/moved), `-ri = --regex_input` (regular expression to match input files), `-ro = --regex_output` (regular expression to copy/move input files to output folder), `-c = --copy` (to enable copy mode, can also --symlink, --move, --delete). Note that you can type `--help` to get an extensive documentation of the arguments along with advices.
+
+Note also that `\dir` is an alias for `[^/\]*`, which allows to reliably match any directory in the path. Note also that `--regex_input` (`-ri`) and `--regex_output` (`-ro`) are matching paths relative to the `--input` and `--output` folders, thus nothing above `--input` and `--output` exist for pathmatcher. This was done so for two reasons: to more easily make your regexp (because you don't have to care about any parent folder from your `--input` or `--output`), and because of safety (to avoid `--delete` on your disk root! You are guaranteed that patchmatcher only works on subdirs).
+
+After executing both of these commands, `pathmatcher.py` will generate a report detailing all file operations it will do, and eventually warn you about conflicts (files getting the same filename and thus collisionning in the output folder).
+
+This works alright, converting the `ABIDE I` dataset scheme to `BIDS`, but this can be made simpler. Pathmatcher was made to allow for loose matching, so basically the idea is that you should try to match only the things that are necessary for you (either for recapture to use in the output like subject's id, or just to disambiguate like the folder name). Here are two simplified commands doing the same thing as above:
+
+```python
+python pathmatcher.py -c -i "ABIDE/" -o "ABIDE-BIDS/" -ri "Caltech_([0-9]+)/.+/mprage.nii.gz" -ro "sub-\1/anat/sub-\1_T1w.nii.gz"
+
+python pathmatcher.py -c -i "ABIDE/" -o "ABIDE-BIDS/" -ri "Caltech_([0-9]+)/.+/rest.nii.gz" -ro "sub-\1/func/sub-\1_task-rest_bold.nii.gz"
+```
+
+Also partial matching is supported, so if you just want to get the list of all T1, you can do the following:
+
+```python
+python pathmatcher.py -i "ABIDE/" -ri "mprage.nii.gz"
+```
+
+This will generate the whole list of T1 and show them in a report.
+
+Of course, you can also use absolute paths for `--input` and `--output`.
+
+And a last trick to help you when you design the regular expressions: use the `--test` argument to see if it matches at least one file, and what operation will be done:
+
+```python
+python pathmatcher.py -c --test -i "ABIDE/" -o "ABIDE-BIDS/" -ri "Caltech_([0-9]+)/.+/mprage.nii.gz" -ro "sub-\1/anat/sub-\1_T1w.nii.gz"
+```
+
+Result:
+
+```
+== Regex Path Matcher started ==
+
+Parameters:
+- Input root: C:\GigaData\BIDS\ABIDE
+- Input regex: Caltech_([0-9]+)/.+/mprage.nii.gz
+- Output root: C:\GigaData\BIDS\ABIDE-BIDS
+- Output regex: sub-\1/anat/sub-\1_T1w.nii.gz
+
+
+Computing paths matching and simulation report, please wait (total time depends
+on files count - filesize has no influence). Press CTRL+C to abort
+
+Match: Caltech_51456/Caltech_51456/scans/anat/resources/NIfTI/files/mprage.nii.gz --> sub-51456/anat/sub-51456_T1w.nii.gz
+
+
+End of simulation. 1 files matched.
+```
+
+Finally, `pathmatcher.py` can be used as an integral part of your own scripts, by either using it on commandline with the `--yes` argument to skip the report, or from your own python script by using the following:
+
+```python
+from pathmatcher import main as pm
+
+# Match all T1 from ABIDE I, don't forget the r'' to avoid conflicts with / character
+# You can use the commandline arguments, but the script will be called without bash but directly inside Python
+my_results = pm(r'-i "ABIDE/" -ri "mprage.nii.gz"', return_report=True)  # use return_report=True to get the matches returned to your my_results variable
+
+print(my_results)
+```
+
+A concrete example of scripting of `pathmatcher.py` can be found inside the `reorientation_registration_helper.py` script.
+
 ## ASCII Rename
 
 ### Description
@@ -91,7 +174,7 @@ Several neuroscience tools like SPM cannot detect files with unicode characters 
 
 This script avoids the need to manually rename every files (try to do that consistently with fMRI volumes...) by replacing any unicode character by its closest ascii counterpart.
 
-Example: maéva -> maeva
+Example: maÃ©va -> maeva
 
 ### Usage
 
