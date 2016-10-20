@@ -140,9 +140,9 @@ still be saved in the specified file).
 
 ### Tutorial
 
-Here is a short introduction in the usage of pathmatcher.py.
+Here is a short introduction in the usage of `pathmatcher.py`.
 
-The most important trick to use pathmatcher.py efficiently that you should remember is this one: try to break operations over multiple commands. Indeed, it's simpler to match anatomical first, then functional, then dwi, etc... Rather than trying to match and reorder them all in only one command (which is possible but hard, for exactly the same result!).
+The most important trick to use `pathmatcher.py` efficiently that you should remember is this one: **try to break operations over multiple commands**. Indeed, it's simpler to match anatomical first, then functional, then dwi, etc... Rather than trying to match and reorder them all in only one command (which is possible but hard, for exactly the same result!).
 
 Let's take a concrete example: we are going to reorganize the NIfTI files from the [ABIDE I dataset](http://fcon_1000.projects.nitrc.org/indi/abide/) to the [BIDS scheme](http://bids.neuroimaging.io/).
 
