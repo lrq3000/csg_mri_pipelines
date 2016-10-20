@@ -26,24 +26,6 @@ If you are not experienced with [regular expressions](http://regexone.com/), you
 ### Usage
 
 ```
-usage: pathmatcher.py [-h] -i /some/path -ri sub[^/\]*/\d+ [-o /new/path]
-                      [-ro newsub/\1] [-c] [-m] [-t] [-y] [-f]
-                      [--show_fullpath] [--report pathmatcher_report.txt]
-                      [-l /some/folder/filename.log] [-v] [--silent]
-
-Regex Path Matcher v0.9.5
-Description: Match paths using regular expression, and then generate a report. Can also substitute using regex to generate output paths. A copy mode is also provided to allow the copy of files from input to output paths.
-This app is essentially a path matcher using regexp, and it then rewrites the path using regexp, so that you can reuse elements from input path to build the output path.
-This is very useful to reorganize folders for experiments, where scripts/softwares expect a specific directories layout in order to work.
-
-Note that the paths are compared against filepaths, not just folders (but of course you can match folders with regex, but remember when designing your regexp that it will compared against files paths, not directories).
-
-Note: use --gui (without any other argument) to launch the experimental gui (needs Gooey library).
-Note2: can be used as a Python module to include in your scripts (set return_report=True).
-    
-
-optional arguments:
-  -h, --help            show this help message and exit
 usage: pathmatcher.py [-h] -i /some/path -ri "sub[^/]+/\d+" [-o /new/path]
                       [-ro "newsub/\1"] [-c] [-s] [-m] [-d] [-t] [-y] [-f]
                       [--show_fullpath] [-ra 1:10-255]
