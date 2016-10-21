@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.0.4'
+__version__ = '1.1.0'
 
 import argparse
 import os
@@ -238,6 +238,10 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                         help='Path to the input folder (the root directory where you placed the files with a tree structure of [Condition]/[id]/data/(mprage|rest)/*.(nii|hdr|img)', **widget_dir)
 
     # Optional general arguments
+    main_parser.add_argument('-ra', '--regex_anat', metavar='[^/]+/anat.nii', type=str, required=False, default=None,
+                        help='Regular expression to match anatomical images (default: Liege CRC scheme).', **widget_dir)
+    main_parser.add_argument('-rf', '--regex_func', metavar='[^/]+/functional.nii', type=str, required=False, default=None,
+                        help='Regular expression to match functional images (default: Liege CRC scheme).', **widget_dir)
     main_parser.add_argument('-v', '--verbose', action='store_true', required=False, default=False,
                         help='Verbose mode (show more output).')
 
@@ -248,6 +252,8 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     #-- Set variables from arguments
     inputpath = fullpath(args.input)
     rootfolderpath = inputpath
+    regex_anat = args.regex_anat
+    regex_func = args.regex_func
     verbose = args.verbose
     checkreg_display_count = 6  # number of anatomical images that will be displayed at the same time during step 3.
 
@@ -255,8 +261,18 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     if os.path.isfile(inputpath): # if inputpath is a single file (instead of a folder), then define the rootfolderpath as the parent directory (for correct relative path generation, else it will also truncate the filename!)
         rootfolderpath = os.path.dirname(inputpath)
 
+    # Strip trailing slashes to ensure we correctly format paths afterward
+    if rootfolderpath:
+        rootfolderpath = rootfolderpath.rstrip('/\\')
+
     if not os.path.isdir(rootfolderpath):
         raise NameError("Specified input path does not exist. Please check the specified path: %s" % rootfolderpath)
+
+    # Define default regular expressions to find images
+    if regex_anat is None:
+        regex_anat = r'([^\/]+)/data/mprage/[^\.]+\.(img|nii)'
+    if regex_func is None:
+        regex_func = r'([^\\/]+)/([^\/]+)/data/(mprage|rest)/[^\.]+\.(img|nii)'
 
     ### Main program
     print("\n== Reorientation and registration helper started ==\n")
@@ -268,8 +284,10 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     conditions_list = next(os.walk(rootfolderpath))[1]
     conditions_list.sort()  # Make sure the folders order is the same every time we launch the application, in order for the user to be able to restart and skip steps and still work on the same files
     template_vars = {'inputpath': rootfolderpath,
-                                    'firstcond': conditions_list[0],
-                                    }
+                     'firstcond': conditions_list[0],
+                     'regex_anat': regex_anat,
+                     'regex_func': regex_func,
+                    }
 
     # == IMPORT MLAB (LOAD MATLAB BRIDGE)
     print("Launching MATLAB, please wait a few seconds...")
@@ -282,12 +300,12 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         raise(exc)
     #matlab.cd(rootfolderpath)  # FIXME: Does not work: Change MATLAB's current dir to root of project's folder, will be easier for user to load other images if needed
 
-    # == Files walking
+    # == Anatomical files walking
     print("Please wait while the directories are scanned to find anatomical images...")
-    files_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "([^\/]+)/data/mprage/[^\.]+\.(img|nii)" --silent '.format(**template_vars), True)
-    files_list = [file[0] for file in files_list]  # extract only the input match, there's no output anyway
-    files_list = [os.path.join(rootfolderpath, file) for file in files_list]  # calculate full absolute path instead of relative (since we need to pass them to MATLAB)
-    print("Found %i anatomical images." % len(files_list))
+    anat_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "{regex_anat}" --silent '.format(**template_vars), True)
+    anat_list = [file[0] for file in anat_list]  # extract only the input match, there's no output anyway
+    anat_list = [os.path.join(rootfolderpath, file) for file in anat_list]  # calculate full absolute path instead of relative (since we need to pass them to MATLAB)
+    print("Found %i anatomical images." % len(anat_list))
 
     # == SPM_AUTO_REORIENT
     # Get the list of anatomical images
@@ -295,7 +313,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     if ask_step():  # Wait for user to be ready
         print("Starting the auto-reorienting process, please wait (this can take a while)...")
         # Auto reorient anatomical images
-        for file in tqdm(files_list, leave=True, unit='files'):
+        for file in tqdm(anat_list, leave=True, unit='files'):
             if verbose: print("- Processing file: %s" % file)
             matlab.spm_auto_reorient(file)
 
@@ -303,7 +321,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     print("\n=> STEP2: CHECK REORIENT AND ADJUST MANUALLY STRUCTURAL MRI")
     print("Anatomical will now be displayed. Please check that they are correctly oriented, if not, please adjust manually.")
     if ask_step():  # Wait for user to be ready
-        for file in tqdm(files_list, leave=True, unit='files'):
+        for file in tqdm(anat_list, leave=True, unit='files'):
             if verbose: print("- Processing file: %s" % file)
             uchoice = ask_next(file)  # ask user if we load the next file? If not, we don't have to load the bridge and file, can just skip
             if uchoice is None: break
@@ -317,16 +335,17 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     print("Multiple subjects' anatomical images will be displayed side by side as a sanity check of correct reorientation. Please check that they are all reoriented correctly (check ventricles, skull boundaries when sliding cursor to the edges, random points in images).")
     if ask_step():  # Wait for user to be ready
         imgs_pack_by = 6
-        for files in tqdm(grouper(checkreg_display_count, files_list), total=int(len(files_list)/imgs_pack_by), leave=True, unit='files'):
+        for files in tqdm(grouper(checkreg_display_count, anat_list), total=int(len(anat_list)/imgs_pack_by), leave=True, unit='files'):
             files = [f for f in files if f is not None]  # remove None filler files in case the remaining files are fewer than the number we want to show
             if len(files) < imgs_pack_by:  # if we have less remaining files than what we want to compare, let's sample randomly more pictures from the original files list
-                files.extend([random.choice(files_list) for _ in range(imgs_pack_by - len(files))])
+                files.extend([random.choice(anat_list) for _ in range(imgs_pack_by - len(files))])
             if verbose: print("- Processing files: %s" % repr(files))
             uchoice = ask_next()  # ask user if we load the next file?
             if uchoice is None: break
             if uchoice == False: continue
             matlab.spm_check_registration(*files)
 
+    # DEPRECATED: was too specific for one special case, should be avoided in the general case.
     # == COPY ANATOMICAL TO OTHER CONDITIONS
     # print("\n=> STEP4: COPYING ANATOMICAL IMAGES")
     # print("Anatomical images will now be copied onto other conditions, please wait a few minutes...")
@@ -346,13 +365,13 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     if ask_step():  # Wait for user to be ready
         # -- Walk files and detect all anatomical and functional images (based on directories layout)
         os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
-        images_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "([^\\/]+)/([^\/]+)/data/(mprage|rest)/[^\.]+\.(img|nii)" --silent '.format(**template_vars), True)
-        images_list = [file[0] for file in images_list]  # extract only the input match, there's no output anyway
+        func_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "{regex_func}" --silent '.format(**template_vars), True)
+        func_list = [file[0] for file in func_list]  # extract only the input match, there's no output anyway
 
         # -- Precomputing to pair together anatomical images and functional images of the same patient for the same condition
         im_table = OrderedDict()  # images lookup table, organized by condition type, then id, then type of imagery (anatomical or functional)
         RE_images = re.compile(r'([^\\/]+)/([^\/]+)/data/(mprage|rest)/')
-        for file in images_list:
+        for file in func_list:
             # Match the regex on each file path, to detect the condition, subject id and type of imagery
             m = RE_images.match(file)
             # Use these metadata to build our images lookup table, with every images grouped and organized according to these parameters
