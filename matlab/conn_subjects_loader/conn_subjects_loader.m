@@ -12,8 +12,8 @@ function conn_subjects_loader()
 %
 % by Stephen Larroque
 % Created on 2016-04-11
-% Tested on conn15h and conn16a
-% v0.9.5
+% Tested on conn17a (see older versions for older conn support)
+% v0.9.8
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016 Stephen Larroque
@@ -30,7 +30,7 @@ function conn_subjects_loader()
 
 % ------ PARAMETERS HERE
 TR = 2.0;
-conn_file = fullfile(pwd, 'conn_project_patients5.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
+conn_file = fullfile(pwd, 'conn_project_patients.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
 root_path = '/media/coma_meth/CALIMERO/Stephen/DONE/Patientstest';
 path_to_spm = '/home/coma_meth/Documents/Stephen/Programs/spm12';
 path_to_conn = '/home/coma_meth/Documents/Stephen/Programs/conn';
@@ -117,17 +117,17 @@ for c=1:length(conditions)
         structpath = getimgpath(spath, 'struct');
         funcpath = getimgpath(spath, 'func'); % do not use the func_motion_corrected subdirectory to find smoothed func images, because we need both the smoothed motion corrected images AND the original images for CONN to work best
         funcmotpath = getimgpath(spath, 'func_motion_corrected');
-        data.conditions{c}.subjects{s}.files.struct = regex_files(structpath, '^wmr.+\.nii$');
+        data.conditions{c}.subjects{s}.files.struct = check_exist(regex_files(structpath, '^wmr.+\.nii$'));
         % Extracting functional motion artifacts corrected, realigned, smoothed images
-        data.conditions{c}.subjects{s}.files.func = regex_files(funcpath, '^s8rwa.+\.img$');
+        data.conditions{c}.subjects{s}.files.func = check_exist(regex_files(funcpath, '^s8rwa.+\.img$'));
         % Extracting regions of interests (we expect 3 different ROIs: 1,2,3 respectively for grey matter, white matter and CSF)
         data.conditions{c}.subjects{s}.files.roi = struct('grey', [], 'white', [], 'csf', []);
-        data.conditions{c}.subjects{s}.files.roi.grey = regex_files(structpath, '^m0wrp1.+\.nii$');
-        data.conditions{c}.subjects{s}.files.roi.white = regex_files(structpath, '^m0wrp2.+\.nii$');
-        data.conditions{c}.subjects{s}.files.roi.csf = regex_files(structpath, '^m0wrp3.+\.nii$');
+        data.conditions{c}.subjects{s}.files.roi.grey = check_exist(regex_files(structpath, '^m0wrp1.+\.nii$'));
+        data.conditions{c}.subjects{s}.files.roi.white = check_exist(regex_files(structpath, '^m0wrp2.+\.nii$'));
+        data.conditions{c}.subjects{s}.files.roi.csf = check_exist(regex_files(structpath, '^m0wrp3.+\.nii$'));
         % Covariates 1st-level
         % ART movement artifacts correction
-        data.conditions{c}.subjects{s}.files.covars1.movement = regex_files(funcmotpath, '^art_regression_outliers_and_movement_s8rwa.+\.mat$');
+        data.conditions{c}.subjects{s}.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_' func_smoothed_prefix '.+\.mat$']));
     end
 end
 
@@ -314,14 +314,17 @@ CONN_x.Analysis.type = 3; % do all analyses at once, we will explore and choose 
 CONN_x.Analysis.sources = CONN_x.Setup.rois.names; % Use all ROIs
 % Voxel-to-voxel
 % Note that conn_batch cannot do all 1st-level analyses, if you specify Analysis.measures then it will compute only Voxel-to-Voxel analysis, else only ROI-to-ROI/Seed-to-Voxel analysis (but we workaround that by calling conn_process directly for the other analyses, see below)
-CONN_x.Analysis.measures = conn_v2v('measurenames'); % Load all available kinds of measures
+CONN_x.vvAnalysis.measures = conn_v2v('measurenames'); % Load all available kinds of measures
 
 % Automate processing?
 if automate
     CONN_x.Setup.done = 1;
     CONN_x.Denoising.done = 1;
     CONN_x.Analysis.done = 1;
+    CONN_x.vvAnalysis.done = 1;
+    if run_dynamicfc; CONN_x.dynAnalysis.done = 1; else; CONN_x.dynAnalysis.done = 0; end;
     CONN_x.Results.done = 1;
+    CONN_x.vvResults.done = 1;
 end
 
 % Resume?
@@ -329,7 +332,11 @@ if resume_job
     CONN_x.Setup.overwrite = 0;
     CONN_x.Denoising.overwrite = 0;
     CONN_x.Analysis.overwrite = 0;
-    CONN_x.Results.overwrite = 1;	
+    CONN_x.vvAnalysis.overwrite = 0;
+    CONN_x.dynAnalysis.overwrite = 0;
+    % Always recompute the 2nd level results based on first level
+    CONN_x.Results.overwrite = 1;
+    CONN_x.vvResults.overwrite = 1;
 end
 
 % ---- SAVE/LOAD INTO CONN
@@ -441,6 +448,35 @@ function filesList = regex_files(dirpath, regex)
     if length(filesList) == 1
         filesList = filesList{1};
     end
+end
+
+function filelist = check_exist(filelist)
+%check_exist  Check if all the files in a given filelist exist, if not, print a warning
+    if class(filelist) == 'cell'
+        files_count = numel(filelist);
+    else
+        files_count = size(filelist, 1);
+    end
+
+    if isempty(filelist)
+        msgID = 'check_exist:FileNotFound';
+        msg = 'Error: file not found (filepath is empty).';
+        FileNotFoundException = MException(msgID,msg);
+        throw(FileNotFoundException);
+    end
+    for fi = 1:files_count
+        if class(filelist) == 'cell'
+            f = filelist{fi};
+        else
+            f = filelist(fi, 1:end);
+        end
+        if ~(exist(f, 'file') == 2) or isempty(f)
+            msgID = 'check_exist:FileNotFound';
+            msg = sprintf('Error: file not found: %s\n', f);
+            FileNotFoundException = MException(msgID,msg);
+            throw(FileNotFoundException);
+        end
+    end % endfor
 end
 
 function err_report = getReportError(errorStruct)
