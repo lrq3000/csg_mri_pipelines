@@ -22,10 +22,11 @@ function conn_subjects_loader()
 % THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 %
 % TODO:
-% * Multi-datasets run: Accept third mode with both inter and intra, by setting number of sessions per subject, and root_path a vector of paths and inter_or_intra a vector of 0 and 1 (to define the mode for each dataset in root_path). Also must set TR per dataset.
+% * 3rd level analysis (multi-subjects and multi-sessions): Accept third mode with both inter and intra, by setting number of sessions per subject, and root_path a vector of paths and inter_or_intra a vector of 0 and 1 (to define the mode for each dataset in root_path). Also must set TR per dataset.
 % * Try to have Dynamic FC for multi-datasets run.
 % * Add CSV reading to automatically input 2nd-level covariates like age or sex.
 % * save an example CONN_x into .mat to show the expected structure (useful if need to debug).
+% * support BIDS format
 %
 
 % ------ PARAMETERS HERE
