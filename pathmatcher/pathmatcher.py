@@ -331,7 +331,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     main_parser.add_argument('-i', '--input', metavar='/some/path', type=str, required=True,
                         help='Path to the input folder', **widget_dir)
     main_parser.add_argument('-ri', '--regex_input', metavar=r'"sub[^/]+/(\d+)"', type=str, required=True,
-                        help=r'Regex to match input paths. Must be defined relatively from --input folder. Do not forget to enclose it in double quotes (and not single)! To match any directory, use [^/\]* or the alias \dir.')
+                        help=r'Regex to match input paths. Must be defined relatively from --input folder. Do not forget to enclose it in double quotes (and not single)! To match any directory, use [^/\]*? or the alias \dir.')
 
     # Optional output/copy mode
     main_parser.add_argument('-o', '--output', metavar='/new/path', type=str, required=False, default=None,
@@ -423,8 +423,8 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     
     # -- Preprocess regular expression to add aliases
     # Directory alias
-    regex_input = regex_input.replace('\dir', '[^\/]*')
-    regex_output = regex_output.replace('\dir', '[^\/]*') if regex_output else regex_output
+    regex_input = regex_input.replace('\dir', '[^\/]*?')
+    regex_output = regex_output.replace('\dir', '[^\/]*?') if regex_output else regex_output
 
     #### Main program
     # Test if regular expressions are correct syntactically
