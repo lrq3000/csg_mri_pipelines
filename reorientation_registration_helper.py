@@ -238,9 +238,9 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                         help='Path to the input folder (the root directory where you placed the files with a tree structure of [Condition]/[id]/data/(mprage|rest)/*.(nii|hdr|img)', **widget_dir)
 
     # Optional general arguments
-    main_parser.add_argument('-ra', '--regexanat', metavar=r'[^/]+/anat.nii', type=str, required=False, default=None,
+    main_parser.add_argument('-ra', '--regex_anat', metavar='"(reg_expr)+/anat.nii"', type=str, required=False, default=None,
                         help='Regular expression to match anatomical images (default: Liege CRC scheme).', **widget_text)
-    main_parser.add_argument('-rf', '--regex_func', metavar=r'[^/]+/functional.nii', type=str, required=False, default=None,
+    main_parser.add_argument('-rf', '--regex_func', metavar='"(reg_expr)+/func.nii"', type=str, required=False, default=None,
                         help='Regular expression to match functional images (default: Liege CRC scheme).', **widget_text)
     main_parser.add_argument('-v', '--verbose', action='store_true', required=False, default=False,
                         help='Verbose mode (show more output).')
@@ -248,7 +248,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
 
     #== Parsing the arguments
     args = main_parser.parse_args(argv) # Storing all arguments to args
-    
+
     #-- Set variables from arguments
     inputpath = fullpath(args.input)
     rootfolderpath = inputpath
