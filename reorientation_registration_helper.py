@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.1.0'
+__version__ = '1.2.0'
 
 import argparse
 import os
@@ -235,13 +235,13 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         widget_text = {}
     # Required arguments
     main_parser.add_argument('-i', '--input', metavar='/some/path', type=str, required=True,
-                        help='Path to the input folder (the root directory where you placed the files with a tree structure of [Condition]/[id]/data/(mprage|rest)/*.(nii|hdr|img)', **widget_dir)
+                        help='Path to the input folder (the root directory where you placed the files, the default supported tree structure being: "Condition/subject_id/data/(sess_id)?/(mprage|rest)/*.(img|nii)". You can also use --regex_anat and --regex_func to define your own directory layout.', **widget_dir)
 
     # Optional general arguments
-    main_parser.add_argument('-ra', '--regex_anat', metavar='"(reg_expr)+/anat.nii"', type=str, required=False, default=None,
-                        help='Regular expression to match anatomical images (default: Liege CRC scheme).', **widget_text)
-    main_parser.add_argument('-rf', '--regex_func', metavar='"(reg_expr)+/func.nii"', type=str, required=False, default=None,
-                        help='Regular expression to match functional images (default: Liege CRC scheme).', **widget_text)
+    main_parser.add_argument('-ra', '--regex_anat', metavar='"(reg_expr)+/anat\.(img|nii)"', type=str, required=False, default=None,
+                        help='Regular expression to match anatomical images (default: Liege CRC scheme). Use regex groups to match with functional regex (if you want to do step 4 - manual coreg). Note: should target nii or img, not hdr.', **widget_text)
+    main_parser.add_argument('-rf', '--regex_func', metavar='"(reg_expr)+/func\.(img|nii)"', type=str, required=False, default=None,
+                        help='Regular expression to match functional images (default: Liege CRC scheme). Regex groups will be matched with the anatomical regex, so you should provide the same groups for both regex. Note: should target nii or img, not hdr (using non-capturing group, eg: ".*\.(?:img|nii)".', **widget_text)
     main_parser.add_argument('-v', '--verbose', action='store_true', required=False, default=False,
                         help='Verbose mode (show more output).')
 
@@ -270,9 +270,14 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
 
     # Define default regular expressions to find images
     if regex_anat is None:
-        regex_anat = r'([^\/]+)/data/mprage/[^\.]+\.(img|nii)'
+        regex_anat = r'(\dir)/(\dir)/data/(\dir/)?mprage/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/mprage/struct.(img|nii)
     if regex_func is None:
-        regex_func = r'([^\\/]+)/([^\/]+)/data/(mprage|rest)/[^\.]+\.(img|nii)'
+        regex_func = r'(\dir)/(\dir)/data/(\dir/)?rest/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/mprage/func_01.(img|nii)
+
+    # -- Preprocess regular expression to add aliases
+    # Directory alias
+    regex_anat = regex_anat.replace('\dir', r'[^\\/]*?')
+    regex_func = regex_func.replace('\dir', r'[^\\/]*?')
 
     ### Main program
     print("\n== Reorientation and registration helper started ==\n")
@@ -363,82 +368,99 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     print("NOTE2: you can also enhance the contrasts by right-clicking on functional image and select Zoom > This image non zero, by setting the number of contours to 2 instead of 3, and by right-clicking on the anatomical image and select Image > Intensity Mapping > local > Equalised squared-histogram (you can also do the same intensity mapping change on the functional image, the contours will adapt according to the greater contrast).")
 
     if ask_step():  # Wait for user to be ready
-        # -- Walk files and detect all anatomical and functional images (based on directories layout)
+        # -- Walk files and detect functional images (we already got structural)
         os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
         func_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "{regex_func}" --silent '.format(**template_vars), True)
         func_list = [file[0] for file in func_list]  # extract only the input match, there's no output anyway
+        print("Found %i functional images." % len(func_list))
 
         # -- Precomputing to pair together anatomical images and functional images of the same patient for the same condition
-        im_table = OrderedDict()  # images lookup table, organized by condition type, then id, then type of imagery (anatomical or functional)
-        RE_images = re.compile(r'([^\\/]+)/([^\/]+)/data/(mprage|rest)/')
-        for file in func_list:
-            # Match the regex on each file path, to detect the condition, subject id and type of imagery
-            m = RE_images.match(file)
-            # Use these metadata to build our images lookup table, with every images grouped and organized according to these parameters
-            # TODO: maybe use a 3rd party lib to do this more elegantly? To group strings according to values in the string that match together?
-            cond, id, im_type = m.group(1), m.group(2), m.group(3)
-            # Create entry if does not exist
-            if cond not in im_table:
-                im_table[cond] = OrderedDict()  # always use an OrderedDict so that we walk the subjects id by the same order every time we launch the program (allows to skip already processed subjects)
-            if id not in im_table[cond]:
-                im_table[cond][id] = OrderedDict()
-            if im_type not in im_table[cond][id]:
-                im_table[cond][id][im_type] = []
+        # Technically, we construct a lookup table where the key is the concatenation of all regex groups
+        # For this we use two regex that we apply on file paths: one for anatomical images and one for functional images.
+        # The regex groups are then used as the key to assign this file in the lookup table, and then assigned to a subdict 'anat' or 'func' depending on the regex used.
+        # This is both flexible because user can provide custom regex and precise because the key is normally unique
+        # (this is more flexible than previous approach to walk both anat and func files at once because it would necessitate a 3rd regex)
+        im_table = OrderedDict()  # Init lookup table. Always use an OrderedDict so that we walk the subjects id by the same order every time we launch the program (allows to skip already processed subjects)
+        RE_anat = re.compile(regex_anat)
+        RE_func = re.compile(regex_func)
+        for img_list in [anat_list, func_list]:
+            if img_list == anat_list:
+                im_type = 'anat'
+            else:
+                im_type = 'func'
 
-            # Append file path to the table at its correct place
-            im_table[cond][id][im_type].append(file)
+            for file in img_list:
+                # Match the regex on each file path, to detect the regex groups (eg, condition, subject id and type of imagery)
+                # Note: use re.search() to allow for partial match (like pathmatcher), not re.match()
+                if im_type == 'anat':
+                    m = RE_anat.search(file)
+                else:  # im_type == 'func':
+                    m = RE_func.search(file)
+                if m is None:
+                    print('Error: no regex match found for type %s file: %s' % (im_type, file))
+                # Use these metadata to build our images lookup table, with every images grouped and organized according to these parameters
+                # TODO: maybe use a 3rd party lib to do this more elegantly? To group strings according to values in the string that match together?
+                im_key = '_'.join(m.groups())  # Note: you can use non-capturing groups like (?:non-captured) to avoid capturing things you don't want but you still want to group (eg, for an OR)
+                # Create entry if does not exist
+                if im_key not in im_table:
+                    im_table[im_key] = {}
+                if im_type not in im_table[im_key]:
+                    im_table[im_key][im_type] = []
+                # Append file path to the table at its correct place
+                # Note that no conflict is possible here (no file can overwrite another), because we just append them all.
+                # But files that are not meant to be grouped can be grouped in the end, so you need to make sure your regex is correct (can use pathmatcher or --verbose to check).
+                im_table[im_key][im_type].append(file)
 
         # Precompute total number of elements user will have to process (to show progress bar)
-        total_images_step5 = 0
-        for cond in im_table:
-            for id in im_table[cond]:
-                total_images_step5 += 1
+        total_images_step5 = len(im_table)
 
         # -- Processing to MATLAB checkreg
         current_image_step5 = 0
-        for cond in im_table:  # for each condition
-            for id in tqdm(im_table[cond], total=total_images_step5, initial=current_image_step5, leave=True, unit='subjects'):  # for each subject id in each condition
-                current_image_step5 += 1
-                # Wait for user to be ready
-                uchoice = ask_next(msg='Open next registration for condition %s, subject id %s? Enter to [c]ontinue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (cond, id))  # ask user if we load the next file?
-                if uchoice is None: break
-                if uchoice == False: continue
-                select_t2_nb = None  # for user to specify a specific T2 image
-                while 1:
-                    # Pick a T1 and T2 images for this subject
-                    if select_t2_nb is not None:
-                        # Pick a specific image specified by user
-                        im_table[cond][id]['mprage'].sort()  # first, sort the lists of files
-                        im_table[cond][id]['rest'].sort()
-                        im_anat = im_table[cond][id]['mprage'][0]
-                        im_func = im_table[cond][id]['rest'][select_t2_nb]
-                    else:
-                        # Randomly choose one anatomical image (there should be only one anyway) and one functional image
-                        im_anat = random.choice(im_table[cond][id]['mprage'])
-                        im_func = random.choice(im_table[cond][id]['rest'])
-                    if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
-                    # Build full absolute path for MATLAB
-                    im_anat = os.path.join(rootfolderpath, im_anat)
-                    im_func = os.path.join(rootfolderpath, im_func)
-                    # Send to MATLAB checkreg!
-                    matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
-                    matlab.spm_check_registration(im_anat, im_func)
-                    # Allow user to select another image if not enough contrast
-                    uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i), Enter to [c]ontinue to next subject: " % (len(im_table[cond][id]['rest'])-1), customchoices=['r', 'first', 'last', 'int'])
-                    if uchoice is True:  # continue if pressed enter or c
-                        break
-                    elif uchoice == 'r':  # select a random image
+        # for each key (can be each condition, session, subject, or even a combination of all those and more)
+        for im_key in tqdm(im_table.keys(), total=total_images_step5, initial=current_image_step5, leave=True, unit='subjects'):
+            current_image_step5 += 1
+            # Wait for user to be ready
+            uchoice = ask_next(msg='Open next registration for subject %s? Enter to [c]ontinue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (im_key))  # ask user if we load the next file?
+            if uchoice is None: break
+            if uchoice == False: continue
+            select_t2_nb = None  # for user to specify a specific T2 image
+            while 1:
+                # Pick a T1 and T2 images for this subject
+                if select_t2_nb is not None:
+                    # Pick a specific image specified by user
+                    im_table[im_key]['anat'].sort()  # first, sort the lists of files
+                    im_table[im_key]['func'].sort()
+                    # Pick the image
+                    im_anat = im_table[im_key]['anat'][0]  # pick the first T1
+                    im_func = im_table[im_key]['func'][select_t2_nb]  # then pick the selected functional image
+                else:
+                    # Randomly choose one anatomical image (there should be only one anyway) and one functional image
+                    im_anat = random.choice(im_table[im_key]['anat'])
+                    im_func = random.choice(im_table[im_key]['func'])
+                if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
+                # Build full absolute path for MATLAB
+                im_anat = os.path.join(rootfolderpath, im_anat)
+                im_func = os.path.join(rootfolderpath, im_func)
+                # Send to MATLAB checkreg!
+                matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
+                matlab.spm_check_registration(im_anat, im_func)
+                # Allow user to select another image if not enough contrast
+                im_func_total = len(im_table[im_key]['func']) - 1  # total number of functional images
+                uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i), Enter to [c]ontinue to next subject: " % (im_func_total), customchoices=['r', 'first', 'last', 'int'])
+                if uchoice is True:  # continue if pressed enter or c
+                    break
+                elif uchoice == 'r':  # select a random image
+                    select_t2_nb = None
+                elif uchoice == 'first':  # select first image
+                    select_t2_nb = 0
+                elif uchoice == 'last':  # select last image
+                    select_t2_nb = -1
+                elif is_int(uchoice) and uchoice is not False:  # Select specific image by number
+                    select_t2_nb = int(uchoice)
+                    # Check the number is between bounds, else select a random image
+                    if not (0 <= select_t2_nb <= im_func_total):
                         select_t2_nb = None
-                    elif uchoice == 'first':  # select first image
-                        select_t2_nb = 0
-                    elif uchoice == 'last':  # select last image
-                        select_t2_nb = -1
-                    elif is_int(uchoice) and uchoice is not False:  # Select specific image by number
-                        select_t2_nb = int(uchoice)
-                        # Check the number is between bounds, else select a random image
-                        if not (0 <= select_t2_nb <= len(im_table[cond][id]['rest'])-1):
-                            select_t2_nb = None
-                        print("Number : %i" % select_t2_nb)
+                    print("Number : %i" % select_t2_nb)
 
     # == END: now user must execute the standard preprocessing script
     print("\nAll done. You should now use the standard preprocessing script. Quitting.")
