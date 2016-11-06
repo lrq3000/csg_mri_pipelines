@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.9.5'
+__version__ = '0.9.6'
 
 import argparse
 import os
@@ -423,8 +423,8 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     
     # -- Preprocess regular expression to add aliases
     # Directory alias
-    regex_input = regex_input.replace('\dir', '[^\/]*?')
-    regex_output = regex_output.replace('\dir', '[^\/]*?') if regex_output else regex_output
+    regex_input = regex_input.replace('\dir', r'[^\\/]*?')
+    regex_output = regex_output.replace('\dir', r'[^\\/]*?') if regex_output else regex_output
 
     #### Main program
     # Test if regular expressions are correct syntactically
