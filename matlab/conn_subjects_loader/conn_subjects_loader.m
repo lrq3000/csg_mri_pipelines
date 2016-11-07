@@ -3,17 +3,22 @@ function conn_subjects_loader()
 % Batch load all subjects and conditions from a given directory root into CONN. This saves quite a lot of time.
 % The script can then just show the CONN GUI and you do the rest, or automate and process everything and show you CONN GUI only when the results are available.
 % You can also resume your job if there is an error or if you CTRL-C (but don't rely too much on it, data can be corrupted). Resume can also be used if you add new subjects.
-% This script expects the subjects data to be already preprocessed.
+% This script expects the subjects data to be already preprocessed by your own means (or you can build the CONN project and use the CONN preprocessing pipeline, up to you...).
+%
+% This script's philosophy is similar to unix/linux: everything is a file. So the entire CONN project is built from your directory layout. This choice was made because it is easier to reorganize folders (and cleaner) than to recode a script to follow the different layout: anybody can move files around, but not everyone can code a MATLAB script.
 % The tree structure from the root must follow the following structure:
-% /root_pth/subject_id/data/(mprage|rest)/*.(img|hdr) -- Note: mprage for structural MRI, rest for fMRI
+% /root_pth/group_id/subject_id/data/session_id/(mprage|rest)/*.(img|hdr) -- Note: mprage for structural MRI, rest for fMRI
+% Any experiment following this tree structure will be accepted and converted to a CONN project automagically for you.
 %
 % Note that BATCH.Setup.preprocessing is not used here as the data is expected to be already preprocessed by your own means (SPM, Dartel/VBM/CAT, custom pipeline, etc.)
 % If you need to modify this script, take a look at the conn_batch_workshop_nyudataset.m script provided with CONN, it's a very good example that inspired this script.
 %
+% This script supports 3rd level analysis (multi-subjects and multi-sessions).
+%
 % by Stephen Larroque
 % Created on 2016-04-11
-% Tested on conn17a (see older versions for older conn support)
-% v0.9.8
+% Tested on conn15h and conn16a, preliminary support for conn17a
+% v0.10.0
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016 Stephen Larroque
@@ -22,25 +27,27 @@ function conn_subjects_loader()
 % THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 %
 % TODO:
-% * 3rd level analysis (multi-subjects and multi-sessions): Accept third mode with both inter and intra, by setting number of sessions per subject, and root_path a vector of paths and inter_or_intra a vector of 0 and 1 (to define the mode for each dataset in root_path). Also must set TR per dataset.
 % * Try to have Dynamic FC for multi-datasets run.
 % * Add CSV reading to automatically input 2nd-level covariates like age or sex.
 % * save an example CONN_x into .mat to show the expected structure (useful if need to debug).
 % * support BIDS format
+% * really support CONN v17 (the project can be built but then the processing of voxel-to-voxel fails!)
+% * support TR per subject (as a vector? in a text file inside subject's folder?)
 %
 
 % ------ PARAMETERS HERE
 TR = 2.0;
-conn_file = fullfile(pwd, 'conn_project_patients.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
-root_path = '/media/coma_meth/CALIMERO/Stephen/DONE/Patientstest';
-path_to_spm = '/home/coma_meth/Documents/Stephen/Programs/spm12';
-path_to_conn = '/home/coma_meth/Documents/Stephen/Programs/conn';
-path_to_roi_maps = '/media/coma_meth/CALIMERO/Stephen/DONE/roitest'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
+conn_file = fullfile(pwd, 'conn_project_esa.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
+conn_ver = 16; % Put here the CONN version you use (just the number, not the letter)
+root_path = 'C:\GigaData\ESA\ESA_test';
+path_to_spm = 'C:\matlab_tools\spm12';
+path_to_conn = 'C:\matlab_tools\conn16a';
+path_to_roi_maps = 'C:\GigaData\ESA\Athena_rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
 func_smoothed_prefix = 's8rwa'; % prefix of the smoothed motion corrected images that we need to remove to get the filename of the original, unsmoothed functional image. This is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
-inter_or_intra = 0; % 0 for inter subjects analysis (each condition = a different group in covariates 2nd level) - 1 for intra subject analysis (each condition = a different session, only one subjects group)
 automate = 0; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
 resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted. Note that resume can also be used to add new subjects without reprocessing old ones.
-run_dynamicfc = 1; % run Dynamic Functional Connectivity analysis? BEWARE: it may fail. This script tries to setup the experiment correctly so that DFC runs, but it may still fail for no obvious reason!
+run_dynamicfc = 0; % run Dynamic Functional Connectivity analysis? BEWARE: it may fail. This script tries to setup the experiment correctly so that DFC runs, but it may still fail for no obvious reason!
+disable_conditions = 0; % do not configure conditions? (this allows different number of sessions per subjects if 1, else if 0 you need to have exactly the same number of sessions per subject)
 % ------ END OF PARAMETERS
 
 % Notes and warnings
@@ -90,15 +97,12 @@ subjects_total = 0;
 for c=1:length(conditions)
     subjects_real_total = subjects_real_total + length(subjects{c}.names);
 end
-if inter_or_intra == 0
-    % If inter-subjects project: count every subjects across all conditions
-    subjects_total = subjects_real_total;
-elseif inter_or_intra == 1
-    % If intra-subject project: count subjects of the first session, the other sessions are expected to include the same subjects
-    subjects_total = length(subjects{1}.names);
-end
+% count every subjects across all conditions
+subjects_total = subjects_real_total;
 
 % Extracting all info and files for each subject necessary to construct the CONN project
+% We first construct our own "data" struct with our own format, this is easier to manage
+% Then later, we fill the CONN project using the info from this "data" struct
 fprintf('Detect images for all subjects...\n');
 data = struct('conditions', []);
 data.conditions = struct('subjects', {});
@@ -106,31 +110,50 @@ sid = 0;
 for c=1:length(conditions)
     for s=1:length(subjects{c}.names)
         sid = sid + 1;
-        fprintf('Detect images for subject %i/%i...\n', sid, subjects_real_total);
         % Initialize the subject's struct
         sname = subjects{c}.names{s};
         spath = fullfile(root_path, conditions{c}, sname);
         data.conditions{c}.subjects{s} = struct('id', sname, ...
-                                                                'dir', spath, ...
-                                                                'files', struct('struct', [], 'func', [], 'roi', []) ...
-                                                                );
-        % Extracting structural realigned normalized images
-        structpath = getimgpath(spath, 'struct');
-        funcpath = getimgpath(spath, 'func'); % do not use the func_motion_corrected subdirectory to find smoothed func images, because we need both the smoothed motion corrected images AND the original images for CONN to work best
-        funcmotpath = getimgpath(spath, 'func_motion_corrected');
-        data.conditions{c}.subjects{s}.files.struct = check_exist(regex_files(structpath, '^wmr.+\.nii$'));
-        % Extracting functional motion artifacts corrected, realigned, smoothed images
-        data.conditions{c}.subjects{s}.files.func = check_exist(regex_files(funcpath, '^s8rwa.+\.img$'));
-        % Extracting regions of interests (we expect 3 different ROIs: 1,2,3 respectively for grey matter, white matter and CSF)
-        data.conditions{c}.subjects{s}.files.roi = struct('grey', [], 'white', [], 'csf', []);
-        data.conditions{c}.subjects{s}.files.roi.grey = check_exist(regex_files(structpath, '^m0wrp1.+\.nii$'));
-        data.conditions{c}.subjects{s}.files.roi.white = check_exist(regex_files(structpath, '^m0wrp2.+\.nii$'));
-        data.conditions{c}.subjects{s}.files.roi.csf = check_exist(regex_files(structpath, '^m0wrp3.+\.nii$'));
-        % Covariates 1st-level
-        % ART movement artifacts correction
-        data.conditions{c}.subjects{s}.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_' func_smoothed_prefix '.+\.mat$']));
-    end
-end
+                                                'dir', spath, ...
+                                                'sessions', [] ...
+                                                );
+        % Find the sessions
+        sessions = get_dirnames(fullfile(spath, 'data'));
+
+        for sessid=1:length(sessions)
+            % Print status
+            fprintf('Detect images for subject %i/%i session %i/%i (%s %s %s)...\n', sid, subjects_real_total, sessid, length(sessions), conditions{c}, sname, sessions{sessid});
+
+            % Get path to images (inside each session)
+            sesspath = fullfile(spath, 'data', sessions{sessid});
+
+            % Init session data struct
+            session = struct('id', sessions{sessid}, ...
+                             'files', struct('struct', [], ...
+                                             'func', [], ...
+                                             'roi', [])); % Note: NEVER init with {}, always with [] because else the struct will be considered empty and unmodifiable! (famous errors: ??? A dot name structure assignment is illegal when the structure is empty. or ??? Error using ==> end)
+
+            % Get full filepaths of all images
+            structpath = getimgpath(sesspath, 'struct');
+            funcpath = getimgpath(sesspath, 'func'); % do not use the func_motion_corrected subdirectory to find smoothed func images, because we need both the smoothed motion corrected images AND the original images for CONN to work best
+            funcmotpath = getimgpath(sesspath, 'func_motion_corrected');
+            % Save the structural images
+            session.files.struct = check_exist(regex_files(structpath, '^wmr.+\.nii$'));
+            % Save functional motion artifacts corrected, realigned, smoothed images
+            session.files.func = check_exist(regex_files(funcpath, '^s8rwa.+\.img$'));
+            % Save regions of interests (we expect 3 different ROIs: 1,2,3 respectively for grey matter, white matter and CSF)
+            session.files.roi = struct('grey', [], 'white', [], 'csf', []);
+            session.files.roi.grey = check_exist(regex_files(structpath, '^m0wrp1.+\.nii$'));
+            session.files.roi.white = check_exist(regex_files(structpath, '^m0wrp2.+\.nii$'));
+            session.files.roi.csf = check_exist(regex_files(structpath, '^m0wrp3.+\.nii$'));
+            % Covariates 1st-level
+            % ART movement artifacts correction
+            session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_' func_smoothed_prefix '.+\.mat$']));
+            % Append in the list of sessions for this subject in our big data struct
+            data.conditions{c}.subjects{s}.sessions{end+1} = session;
+        end % for sessions
+    end % for subjects
+end % for conditions
 
 % ROIs detection
 if length(path_to_roi_maps) > 0
@@ -146,20 +169,22 @@ if length(path_to_roi_maps) > 0
 end
 
 % Sanity checks
+fprintf('Sanity checks...\n');
 % 1. Check that there are loaded images, else the tree structure is obviously wrong
 a = data.conditions{:};
-b = a.subjects{:};
-if length(b.files.struct) == 0
+b = a.subjects{:}; % MATLAB does not support chaining {:} (eg, a{:}.b{:}) so we need to split this command on several lines...
+c = b.sessions{:};
+if length(c.files.struct) == 0
     error('No subject found. Please check that the specified root_path follows the required tree structure.');
 end
-% 2. If intra-subject project, check that there is the exact same subjects across all conditions (= sessions here)
-if inter_or_intra == 1
-    if length(conditions) < 2
-        error('Project set to be intra-subject, but there are less than 2 sessions!')
-    end
-    for c=2:length(conditions)
-        if strcmp( char(subjects{c}.names), char(subjects{1}.names) ) == 0
-            error('Project set to be intra-subject, but all sessions do not contain the same subjects (or some are missing in one session)!');
+% 2. Check if the number of sessions is consistent for all subjects (only if automatic conditions configuration is enabled, else if disabled then the number of sessions can be different per subject)
+if disable_conditions == 0
+    count_sessions = length(data.conditions{1}.subjects{1}.sessions);
+    for c=1:length(conditions)
+        for s=1:length(subjects{c}.names)
+            if count_sessions ~= length(data.conditions{c}.subjects{s}.sessions)
+                error('Different number of sessions between subjects, please check them! Condition %s subject %s has %i sessions, condition %s subject %s has %i sessions.\n', conditions{1}, subjects{1}.names{1}, length(data.conditions{1}.subjects{1}.sessions), conditions{c}, subjects{c}.names{s}, length(data.conditions{c}.subjects{s}.sessions));
+            end
         end
     end
 end
@@ -204,63 +229,44 @@ CONN_x.Setup.masks.CSF = {};
 sid = 0; % subject counter, because we need to add them all in a row in CONN, we assign conditions later
 for c=1:length(conditions)
     for s=1:length(subjects{c}.names)
-        % Set subject id and session id depending on if we do inter-subjects project or intra-subject
-        if inter_or_intra == 0
-            % Inter-subjects project: each subject gets its own id, and they will be separated in different groups in covars 2nd-level
-            sid = sid + 1;
-            sessid = 1;  % and we always use one session only
-        elseif inter_or_intra == 1
-            % Intra-subject project: the different conditions are just various sessions for the same subjects, so we reuse the subject's id and just make a new session
-            sid = s;
-            sessid = c;
-        end
-
-        % Structural and functional images
-        if length(CONN_x.Setup.structurals) < sid
-            CONN_x.Setup.structurals{sid} = {};
-            CONN_x.Setup.functionals{sid} = {};
-        end
-        CONN_x.Setup.structurals{sid}{sessid} = data.conditions{c}.subjects{s}.files.struct;
-        CONN_x.Setup.functionals{sid}{sessid} = char(data.conditions{c}.subjects{s}.files.func); % convert cell array to char array
-        % ROI masks
-        CONN_x.Setup.masks.Grey{sid}{sessid} = data.conditions{c}.subjects{s}.files.roi.grey;
-        CONN_x.Setup.masks.White{sid}{sessid} = data.conditions{c}.subjects{s}.files.roi.white;
-        CONN_x.Setup.masks.CSF{sid}{sessid} = data.conditions{c}.subjects{s}.files.roi.csf;
-        % Covariates 1st-level
-        CONN_x.Setup.covariates.files{1}{sid}{sessid} = data.conditions{c}.subjects{s}.files.covars1.movement;
-    end
-end
+        sid = sid + 1; % We need to continue the subjects counter after switch to next condition, but subject counter s will go back to 0, hence the sid which is the CONN subject's id
+        sessions = data.conditions{c}.subjects{s}.sessions;
+        for sessid=1:length(data.conditions{c}.subjects{s}.sessions)
+            % Structural and functional images
+            if length(CONN_x.Setup.structurals) < sid % extend and init if adding a new subject
+                CONN_x.Setup.structurals{sid} = {};
+                CONN_x.Setup.functionals{sid} = {};
+            end
+            CONN_x.Setup.structurals{sid}{sessid} = sessions{sessid}.files.struct;
+            CONN_x.Setup.functionals{sid}{sessid} = char(sessions{sessid}.files.func); % convert cell array to char array for CONN
+            % ROI masks
+            CONN_x.Setup.masks.Grey{sid}{sessid} = sessions{sessid}.files.roi.grey;
+            CONN_x.Setup.masks.White{sid}{sessid} = sessions{sessid}.files.roi.white;
+            CONN_x.Setup.masks.CSF{sid}{sessid} = sessions{sessid}.files.roi.csf;
+            % Covariates 1st-level
+            CONN_x.Setup.covariates.files{1}{sid}{sessid} = sessions{sessid}.files.covars1.movement;
+        end % for sessions
+    end % for subjects
+end % for conditions
 
 % SUBJECTS GROUPS
-if inter_or_intra == 0
-    fprintf('Loading groups...\n');
-    CONN_x.Setup.subjects.group_names = conditions;
-    CONN_x.Setup.subjects.groups = [];
-    for c=1:length(conditions)
-        CONN_x.Setup.subjects.groups = [CONN_x.Setup.subjects.groups ones(1, length(subjects{c}.names))*c];
-    end
-    CONN_x.Setup.subjects.effect_names = {'AllSubjects'};
-    CONN_x.Setup.subjects.effects{1} = ones(1, subjects_total);
-elseif inter_or_intra == 1
-    CONN_x.Setup.subjects.group_names = {'AllSubjects'};
-    CONN_x.Setup.subjects.groups = ones(1, subjects_total);
+fprintf('Loading groups...\n');
+CONN_x.Setup.subjects.group_names = conditions;
+CONN_x.Setup.subjects.groups = [];
+for c=1:length(conditions)
+    CONN_x.Setup.subjects.groups = [CONN_x.Setup.subjects.groups ones(1, length(subjects{c}.names))*c];
 end
+CONN_x.Setup.subjects.effect_names = {'AllSubjects'};
+CONN_x.Setup.subjects.effects{1} = ones(1, subjects_total);
 
 % CONDITIONS DURATION
-if inter_or_intra == 0
-    % Inter-subjects mode: create only one condition and one session, all files are considered to belong to different subjects and different conditions
-    nconditions = 1;
-    nsessions = 1;
-    CONN_x.Setup.conditions.names={'rest'};
-    for ncond=1:nconditions,for nsub=1:subjects_total,for nses=1:nsessions
-        CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses}=0;
-        CONN_x.Setup.conditions.durations{ncond}{nsub}{nses}=inf;
-    end;end;end     % rest condition (all sessions)
-elseif inter_or_intra == 1
-    % Intra-subject mode: the different conditions are considered to be multiple sessions from same set of subjects. In CONN, we will describe that by adding one condition and one session per folder condition, and we will link the session to the condition (eg, condition rest1 will have onset and duration set only for session1, empty for session2, and on the opposite condition rest2 will have onset and duration set for session2 but not session1).
-    nconditions = length(conditions);
-    nsessions = length(conditions);
-    CONN_x.Setup.conditions.names = conditions;
+% Here, we want to look at the difference between the sessions (pre-post kind of experiment), so the different conditions are considered to be the difference between the sessions, so the conditions are the same as the sessions
+% This automatic configuration of conditions can be disabled to allow for more flexible experiments (eg, with different number of sessions per subject).
+if disable_conditions == 0
+    nsessions = length(data.conditions{1}.subjects{1}.sessions);
+    nconditions = nsessions;
+    vec2str = @(v) strtrim(cellstr(num2str(v')));
+    CONN_x.Setup.conditions.names = strcat('session_', vec2str(1:nsessions))';
     for ncond=1:nconditions,for nsub=1:subjects_total,for nses=1:nsessions
         % Assign if session == condition, else set to empty
         if ncond == nses
@@ -315,17 +321,23 @@ CONN_x.Analysis.type = 3; % do all analyses at once, we will explore and choose 
 CONN_x.Analysis.sources = CONN_x.Setup.rois.names; % Use all ROIs
 % Voxel-to-voxel
 % Note that conn_batch cannot do all 1st-level analyses, if you specify Analysis.measures then it will compute only Voxel-to-Voxel analysis, else only ROI-to-ROI/Seed-to-Voxel analysis (but we workaround that by calling conn_process directly for the other analyses, see below)
-CONN_x.vvAnalysis.measures = conn_v2v('measurenames'); % Load all available kinds of measures
+if conn_ver < 17
+    CONN_x.Analysis.measures = conn_v2v('measurenames'); % Load all available kinds of measures
+elseif conn_ver >= 17
+    CONN_x.vvAnalysis.measures = conn_v2v('measurenames'); % Load all available kinds of measures
+end
 
 % Automate processing?
 if automate
     CONN_x.Setup.done = 1;
     CONN_x.Denoising.done = 1;
     CONN_x.Analysis.done = 1;
-    CONN_x.vvAnalysis.done = 1;
-    if run_dynamicfc; CONN_x.dynAnalysis.done = 1; else; CONN_x.dynAnalysis.done = 0; end;
     CONN_x.Results.done = 1;
-    CONN_x.vvResults.done = 1;
+    if conn_ver >= 17
+        CONN_x.vvAnalysis.done = 1;
+        if run_dynamicfc; CONN_x.dynAnalysis.done = 1; else; CONN_x.dynAnalysis.done = 0; end;
+        CONN_x.vvResults.done = 1;
+    end
 end
 
 % Resume?
@@ -333,11 +345,13 @@ if resume_job
     CONN_x.Setup.overwrite = 0;
     CONN_x.Denoising.overwrite = 0;
     CONN_x.Analysis.overwrite = 0;
-    CONN_x.vvAnalysis.overwrite = 0;
-    CONN_x.dynAnalysis.overwrite = 0;
     % Always recompute the 2nd level results based on first level
     CONN_x.Results.overwrite = 1;
-    CONN_x.vvResults.overwrite = 1;
+    if conn_ver >= 17
+        CONN_x.vvAnalysis.overwrite = 0;
+        CONN_x.dynAnalysis.overwrite = 0;
+        CONN_x.vvResults.overwrite = 1;
+    end
 end
 
 % ---- SAVE/LOAD INTO CONN
@@ -419,11 +433,11 @@ function fpath = getimgpath(dirpath, imtype)
     fpath = '';
     switch imtype
         case 'struct'  % anatomical images (T1 aka structural) folder
-            fpath = fullfile(dirpath, 'data', 'mprage');
+            fpath = fullfile(dirpath, 'mprage');
         case 'func' % functional images (T2) folder
-            fpath = fullfile(dirpath, 'data', 'rest');
+            fpath = fullfile(dirpath, 'rest');
         case 'func_motion_corrected'
-            fpath = fullfile(dirpath, 'data', 'rest', 'restMotionCorrected');
+            fpath = fullfile(dirpath, 'rest', 'restMotionCorrected');
     end
 end
 
