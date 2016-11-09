@@ -39,7 +39,7 @@ function conn_subjects_loader()
 TR = 2.0;
 conn_file = fullfile(pwd, 'conn_project_esa.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
 conn_ver = 16; % Put here the CONN version you use (just the number, not the letter)
-root_path = 'C:\GigaData\ESA\ESA_test';
+root_path = 'C:\GigaData\ESA\ESA_reordered2-preproc';
 path_to_spm = 'C:\matlab_tools\spm12';
 path_to_conn = 'C:\matlab_tools\conn16a';
 path_to_roi_maps = 'C:\GigaData\ESA\Athena_rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
@@ -47,7 +47,7 @@ func_smoothed_prefix = 's8rwa'; % prefix of the smoothed motion corrected images
 automate = 0; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
 resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted. Note that resume can also be used to add new subjects without reprocessing old ones.
 run_dynamicfc = 0; % run Dynamic Functional Connectivity analysis? BEWARE: it may fail. This script tries to setup the experiment correctly so that DFC runs, but it may still fail for no obvious reason!
-disable_conditions = 0; % do not configure conditions? (this allows different number of sessions per subjects if 1, else if 0 you need to have exactly the same number of sessions per subject)
+disable_conditions = 0; % do not configure conditions? (in case you have an error or if you want to configure yourself, conditions are tricky to configure)
 % ------ END OF PARAMETERS
 
 % Notes and warnings
@@ -177,14 +177,12 @@ c = b.sessions{:};
 if length(c.files.struct) == 0
     error('No subject found. Please check that the specified root_path follows the required tree structure.');
 end
-% 2. Check if the number of sessions is consistent for all subjects (only if automatic conditions configuration is enabled, else if disabled then the number of sessions can be different per subject)
-if disable_conditions == 0
-    count_sessions = length(data.conditions{1}.subjects{1}.sessions);
-    for c=1:length(conditions)
-        for s=1:length(subjects{c}.names)
-            if count_sessions ~= length(data.conditions{c}.subjects{s}.sessions)
-                error('Different number of sessions between subjects, please check them! Condition %s subject %s has %i sessions, condition %s subject %s has %i sessions.\n', conditions{1}, subjects{1}.names{1}, length(data.conditions{1}.subjects{1}.sessions), conditions{c}, subjects{c}.names{s}, length(data.conditions{c}.subjects{s}.sessions));
-            end
+% 2. Check if the number of sessions is consistent for all subjects (the number of sessions can be different per subject but it's good to notify the user in case this is a mistake)
+count_sessions = length(data.conditions{1}.subjects{1}.sessions);
+for c=1:length(conditions)
+    for s=1:length(subjects{c}.names)
+        if count_sessions ~= length(data.conditions{c}.subjects{s}.sessions)
+            fprintf('Warning: Different number of sessions between subjects, please check them! Condition %s subject %s has %i sessions, condition %s subject %s has %i sessions.\n', conditions{1}, subjects{1}.names{1}, length(data.conditions{1}.subjects{1}.sessions), conditions{c}, subjects{c}.names{s}, length(data.conditions{c}.subjects{s}.sessions));
         end
     end
 end
@@ -226,6 +224,7 @@ CONN_x.Setup.masks.Grey = {};
 CONN_x.Setup.masks.White = {};
 CONN_x.Setup.masks.CSF = {};
 % Main filling loop
+% We transfer everything we detected to a new batch struct with the structure expected by conn_batch (this is sort of a struct translation/conversion call it whatever you want)
 sid = 0; % subject counter, because we need to add them all in a row in CONN, we assign conditions later
 for c=1:length(conditions)
     for s=1:length(subjects{c}.names)
@@ -263,13 +262,25 @@ CONN_x.Setup.subjects.effects{1} = ones(1, subjects_total);
 % Here, we want to look at the difference between the sessions (pre-post kind of experiment), so the different conditions are considered to be the difference between the sessions, so the conditions are the same as the sessions
 % This automatic configuration of conditions can be disabled to allow for more flexible experiments (eg, with different number of sessions per subject).
 if disable_conditions == 0
-    nsessions = length(data.conditions{1}.subjects{1}.sessions);
+    % Count maximum number of sessions
+    max_count_sessions = 0;
+    for c=1:length(conditions), for s=1:length(subjects{c}.names)
+        nb_sess = length(data.conditions{c}.subjects{s}.sessions);
+        if nb_sess > max_count_sessions
+            max_count_sessions = nb_sess;
+        end
+    end; end
+
+    % Set as many conditions as there are sessions (because each condition is each session)
+    nsessions = max_count_sessions;
     nconditions = nsessions;
+    % Create conditions names (just 'session_x')
     vec2str = @(v) strtrim(cellstr(num2str(v')));
     CONN_x.Setup.conditions.names = strcat('session_', vec2str(1:nsessions))';
-    for ncond=1:nconditions,for nsub=1:subjects_total,for nses=1:nsessions
-        % Assign if session == condition, else set to empty
-        if ncond == nses
+    % For each subject and subject/session
+    for ncond=1:nconditions,for nsub=1:subjects_total,for nses=1:length(CONN_x.Setup.functionals{nsub})
+        % Assign if session == condition and the session exists for this subject, else set to empty
+        if ncond == nses && length(CONN_x.Setup.functionals{nsub}) >= nses % note: the second condition is just a sanity check, not necessary because we already loop only for sessions that exist for this subject
             CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses} = 0;
             CONN_x.Setup.conditions.durations{ncond}{nsub}{nses} = inf;
         else
@@ -279,7 +290,7 @@ if disable_conditions == 0
     end;end;end     % rest condition (all sessions)
     % Add a special condition that will include absolutely all subjects, this allows Dynamic Functional Connectivity to work
     CONN_x.Setup.conditions.names = [CONN_x.Setup.conditions.names {'AllSessions'}];
-    for ncond=nconditions+1,for nsub=1:subjects_total,for nses=1:nsessions
+    for ncond=nconditions+1,for nsub=1:subjects_total,for nses=1:length(CONN_x.Setup.functionals{nsub})
         CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses}=0;
         CONN_x.Setup.conditions.durations{ncond}{nsub}{nses}=inf;
     end;end;end     % rest condition (all sessions)
