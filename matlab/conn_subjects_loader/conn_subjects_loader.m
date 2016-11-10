@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a, preliminary support for conn17a
-% v0.10.0
+% v0.10.2
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016 Stephen Larroque
@@ -39,11 +39,15 @@ function conn_subjects_loader()
 TR = 2.0;
 conn_file = fullfile(pwd, 'conn_project_esa.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
 conn_ver = 16; % Put here the CONN version you use (just the number, not the letter)
-root_path = 'C:\GigaData\ESA\ESA_reordered2-preproc';
+root_path = 'D:\Stephen\DataToPreproc\ESA_Cosmonauts\ESA_test';
 path_to_spm = 'C:\matlab_tools\spm12';
 path_to_conn = 'C:\matlab_tools\conn16a';
 path_to_roi_maps = 'C:\GigaData\ESA\Athena_rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
 func_smoothed_prefix = 's8rwa'; % prefix of the smoothed motion corrected images that we need to remove to get the filename of the original, unsmoothed functional image. This is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
+struct_norm_prefix = 'wmr'; % prefix for the (MNI) normalized structural image.
+struct_segmented_grey_prefix = 'm0wrp1'; % prefix for segmented structural grey matter.
+struct_segmented_white_prefix = 'm0wrp2'; % idem for white matter.
+struct_segmented_csf_prefix = 'm0wrp3'; % idem for csf.
 automate = 0; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
 resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted. Note that resume can also be used to add new subjects without reprocessing old ones.
 run_dynamicfc = 0; % run Dynamic Functional Connectivity analysis? BEWARE: it may fail. This script tries to setup the experiment correctly so that DFC runs, but it may still fail for no obvious reason!
@@ -59,8 +63,9 @@ fprintf('Note4: Voxel-to-Voxel analysis needs at least 2 subjects per condition/
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
 bakpath = path; % backup the current path variable
 restoredefaultpath(); matlabpath(strrep(matlabpath, userpath, '')); % clean up the path
-addpath(path_to_spm); % add the path to SPM
-addpath(path_to_conn); % add the path to CONN toolbox
+addpath_with_check(path_to_spm, 'spm'); % add the path to SPM
+addpath_with_check(fullfile(path_to_spm, 'matlabbatch'), 'cfg_getfile'); % add the path to SPM matlabbatch (required by some versions of CONN...)
+addpath_with_check(path_to_conn, 'conn'); % add the path to CONN toolbox
 
 % Start logging if automating
 if automate == 1
@@ -105,9 +110,10 @@ subjects_total = subjects_real_total;
 % Then later, we fill the CONN project using the info from this "data" struct
 fprintf('Detect images for all subjects...\n');
 data = struct('conditions', []);
-data.conditions = struct('subjects', {});
+data.conditions = struct('id', {}, 'subjects', {});
 sid = 0;
 for c=1:length(conditions)
+    data.conditions{c}.id = conditions{c};
     for s=1:length(subjects{c}.names)
         sid = sid + 1;
         % Initialize the subject's struct
@@ -138,17 +144,17 @@ for c=1:length(conditions)
             funcpath = getimgpath(sesspath, 'func'); % do not use the func_motion_corrected subdirectory to find smoothed func images, because we need both the smoothed motion corrected images AND the original images for CONN to work best
             funcmotpath = getimgpath(sesspath, 'func_motion_corrected');
             % Save the structural images
-            session.files.struct = check_exist(regex_files(structpath, '^wmr.+\.nii$'));
+            session.files.struct = check_exist(regex_files(structpath, ['^' struct_norm_prefix '.+\.(img|nii)$']));
             % Save functional motion artifacts corrected, realigned, smoothed images
-            session.files.func = check_exist(regex_files(funcpath, '^s8rwa.+\.img$'));
+            session.files.func = check_exist(regex_files(funcpath, ['^' func_smoothed_prefix '.+\.(img|nii)$']));
             % Save regions of interests (we expect 3 different ROIs: 1,2,3 respectively for grey matter, white matter and CSF)
             session.files.roi = struct('grey', [], 'white', [], 'csf', []);
-            session.files.roi.grey = check_exist(regex_files(structpath, '^m0wrp1.+\.nii$'));
-            session.files.roi.white = check_exist(regex_files(structpath, '^m0wrp2.+\.nii$'));
-            session.files.roi.csf = check_exist(regex_files(structpath, '^m0wrp3.+\.nii$'));
+            session.files.roi.grey = check_exist(regex_files(structpath, ['^' struct_segmented_grey_prefix '.+\.(img|nii)$']));
+            session.files.roi.white = check_exist(regex_files(structpath, ['^' struct_segmented_white_prefix '.+\.(img|nii)$']));
+            session.files.roi.csf = check_exist(regex_files(structpath, ['^' struct_segmented_csf_prefix '.+\.(img|nii)$']));
             % Covariates 1st-level
             % ART movement artifacts correction
-            session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_' func_smoothed_prefix '.+\.mat$']));
+            session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_(' func_smoothed_prefix '.+)?\.mat$']));
             % Append in the list of sessions for this subject in our big data struct
             data.conditions{c}.subjects{s}.sessions{end+1} = session;
         end % for sessions
@@ -170,14 +176,37 @@ end
 
 % Sanity checks
 fprintf('Sanity checks...\n');
-% 1. Check that there are loaded images, else the tree structure is obviously wrong
-a = data.conditions{:};
-b = a.subjects{:}; % MATLAB does not support chaining {:} (eg, a{:}.b{:}) so we need to split this command on several lines...
-c = b.sessions{:};
-if length(c.files.struct) == 0
-    error('No subject found. Please check that the specified root_path follows the required tree structure.');
+% 1. Check globally that there are any loaded images, else the tree structure is obviously wrong
+if isempty(data.conditions(:)); error('Cannot find any subject group! Please check your dataset directories structure.'); end;
+check_cond = data.conditions{:};
+if isempty(check_cond.subjects(:)); error('Cannot find any subject! Please check your dataset directories structure.'); end;
+check_subj = check_cond.subjects{:}; % MATLAB does not support chaining {:} (eg, a{:}.b{:}) so we need to split this command on several lines...
+if isempty(check_subj.sessions(:)); error('Cannot find any session! Please check your dataset directories structure.'); end;
+check_sess = check_subj.sessions{:};
+if length(check_sess.files.struct) == 0
+    error('No structural image found. Please check that the specified root_path follows the required tree structure.');
 end
-% 2. Check if the number of sessions is consistent for all subjects (the number of sessions can be different per subject but it's good to notify the user in case this is a mistake)
+if length(check_sess.files.func) == 0
+    error('No functional image found. Please check that the specified root_path follows the required tree structure.');
+end
+
+% 2. Check for each group, subject and session that there are both structural and functional images
+for c=1:length(data.conditions)
+    if ~isfield(data.conditions{c}, 'subjects') || isempty(data.conditions{c}.subjects); error('No subjects for group %s. Please check your dataset structure.', data.conditions{c}.id); end;
+    for s=1:length(data.conditions{c}.subjects)
+        if ~isfield(data.conditions{c}.subjects{s}, 'sessions') || isempty(data.conditions{c}.subjects{s}.sessions); error('No sessions for group %s subject %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id); end;
+        for sessid=1:length(data.conditions{c}.subjects{s}.sessions)
+            subjfile = data.conditions{c}.subjects{s}.sessions{sessid}.files;
+            if isempty(subjfile.struct); error('No structural image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
+            if isempty(subjfile.func); error('No functional image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
+            if isempty(subjfile.roi.grey); error('No segmented grey matter image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
+            if isempty(subjfile.roi.white); error('No segmented white matter image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
+            if isempty(subjfile.roi.csf); error('No segmented csf matter image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
+        end % end for sessions
+    end % end for subjects
+end % end for groups
+
+% 3. Check if the number of sessions is consistent for all subjects (the number of sessions can be different per subject but it's good to notify the user in case this is a mistake)
 count_sessions = length(data.conditions{1}.subjects{1}.sessions);
 for c=1:length(conditions)
     for s=1:length(subjects{c}.names)
@@ -478,7 +507,7 @@ end
 
 function filelist = check_exist(filelist)
 %check_exist  Check if all the files in a given filelist exist, if not, print a warning
-    if class(filelist) == 'cell'
+    if strcmp(class(filelist), 'cell')
         files_count = numel(filelist);
     else
         files_count = size(filelist, 1);
@@ -541,5 +570,17 @@ function stopDiary(logfile)
         fid = fopen(logfile, 'a+');
         fprintf(fid, ['ERROR: ??? ' errmsg]);
         fclose(fid);
+    end
+end
+
+function addpath_with_check(apath, cmd2check)
+% add_path_with_check(apath, cmd2check)
+% Add a path to Matlab's PATH, and check if the path is correct by calling a command to check
+    addpath(apath);
+    check = which(cmd2check, '-ALL');
+    if length(check) == 0
+        error('Addpath failed for command "%s": incorrect path: %s\n', cmd2check, apath);
+    elseif length(check) > 1
+        error('Addpath failed for command "%s": too many paths, there should be only one (please restoredefaultpath()): %s\n', cmd2check, sprintf('%s, ', check{:}));
     end
 end
