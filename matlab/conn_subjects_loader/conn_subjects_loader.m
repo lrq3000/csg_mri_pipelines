@@ -1,6 +1,6 @@
 function conn_subjects_loader()
 % conn_subjects_loader
-% Batch load all subjects and conditions from a given directory root into CONN. This saves quite a lot of time.
+% Batch load all groups, subjects and sessions from a given directory root into CONN. This saves quite a lot of time.
 % The script can then just show the CONN GUI and you do the rest, or automate and process everything and show you CONN GUI only when the results are available.
 % You can also resume your job if there is an error or if you CTRL-C (but don't rely too much on it, data can be corrupted). Resume can also be used if you add new subjects.
 % This script expects the subjects data to be already preprocessed by your own means (or you can build the CONN project and use the CONN preprocessing pipeline, up to you...).
@@ -39,7 +39,7 @@ function conn_subjects_loader()
 TR = 2.0;
 conn_file = fullfile(pwd, 'conn_project_esa.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
 conn_ver = 16; % Put here the CONN version you use (just the number, not the letter)
-root_path = 'D:\Stephen\DataToPreproc\ESA_Cosmonauts\ESA_test';
+root_path = 'D:\Stephen\DataToPreproc\ESA_Cosmonauts\ESA_session3';
 path_to_spm = 'C:\matlab_tools\spm12';
 path_to_conn = 'C:\matlab_tools\conn16a';
 path_to_roi_maps = 'C:\GigaData\ESA\Athena_rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
@@ -58,7 +58,7 @@ disable_conditions = 0; % do not configure conditions? (in case you have an erro
 fprintf('Note: data is expected to be already preprocessed\n(realignment/slicetiming/coregistration/segmentation/normalization/smoothing)\n');
 fprintf('Note2: this script expects a very specific directry tree layout\nfor your images (see script header comment). If not met,\nthis may produce errors like "Index exceeds matrix dimensions."\nwhen executing conn_batch(CONN_x).\n');
 fprintf('Note3: if in inter-subjects mode you get the error\n"Reference to non-existent field t. Error in spm_hrf", you have to\nedit spm_hrf.m to replace stats.fmri.t by stats.fmri.fmri_t .\n');
-fprintf('Note4: Voxel-to-Voxel analysis needs at least 2 subjects per condition/group!\n');
+fprintf('Note4: Voxel-to-Voxel analysis needs at least 2 subjects per group!\n');
 
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
 bakpath = path; % backup the current path variable
@@ -83,43 +83,43 @@ fprintf('== Conn subjects loader ==\n');
 % ------ LOADING SUBJECTS FILES
 fprintf('-- Loading subjects files --\n');
 
-% Scan the root path to extract all conditions and subjects names
-fprintf('Loading conditions (subjects groups)...\n');
-% Extract conditions
-conditions = get_dirnames(root_path);
-conditions = conditions(~strcmp(conditions, 'JOBS')); % remove JOBS from the conditions
-% Extract subjects names from inside the conditions
+% Scan the root path to extract all groups and subjects names
+fprintf('Loading subjects groups...\n');
+% Extract groups
+groups = get_dirnames(root_path);
+groups = groups(~strcmp(groups, 'JOBS')); % remove JOBS from the groups
+% Extract subjects names from inside the groups
 subjects = {};
-for c=1:length(conditions)
-    subjects{c} = struct('names', []); % associate the subjects names for each condition
-    subjn = get_dirnames(fullfile(root_path, conditions{c}));
-    subjects{c}.names = subjn;
+for g=1:length(groups)
+    subjects{g} = struct('names', []); % associate the subjects names for each group
+    subjn = get_dirnames(fullfile(root_path, groups{g}));
+    subjects{g}.names = subjn;
 end
 
 % Counting number of subjects
 subjects_real_total = 0;
 subjects_total = 0;
-for c=1:length(conditions)
-    subjects_real_total = subjects_real_total + length(subjects{c}.names);
+for g=1:length(groups)
+    subjects_real_total = subjects_real_total + length(subjects{g}.names);
 end
-% count every subjects across all conditions
+% count every subjects across all groups
 subjects_total = subjects_real_total;
 
 % Extracting all info and files for each subject necessary to construct the CONN project
 % We first construct our own "data" struct with our own format, this is easier to manage
 % Then later, we fill the CONN project using the info from this "data" struct
 fprintf('Detect images for all subjects...\n');
-data = struct('conditions', []);
-data.conditions = struct('id', {}, 'subjects', {});
+data = struct('groups', []);
+data.groups = struct('id', {}, 'subjects', {});
 sid = 0;
-for c=1:length(conditions)
-    data.conditions{c}.id = conditions{c};
-    for s=1:length(subjects{c}.names)
+for g=1:length(groups)
+    data.groups{g}.id = groups{g};
+    for s=1:length(subjects{g}.names)
         sid = sid + 1;
         % Initialize the subject's struct
-        sname = subjects{c}.names{s};
-        spath = fullfile(root_path, conditions{c}, sname);
-        data.conditions{c}.subjects{s} = struct('id', sname, ...
+        sname = subjects{g}.names{s};
+        spath = fullfile(root_path, groups{g}, sname);
+        data.groups{g}.subjects{s} = struct('id', sname, ...
                                                 'dir', spath, ...
                                                 'sessions', [] ...
                                                 );
@@ -128,7 +128,7 @@ for c=1:length(conditions)
 
         for sessid=1:length(sessions)
             % Print status
-            fprintf('Detect images for subject %i/%i session %i/%i (%s %s %s)...\n', sid, subjects_real_total, sessid, length(sessions), conditions{c}, sname, sessions{sessid});
+            fprintf('Detect images for subject %i/%i session %i/%i (%s %s %s)...\n', sid, subjects_real_total, sessid, length(sessions), groups{g}, sname, sessions{sessid});
 
             % Get path to images (inside each session)
             sesspath = fullfile(spath, 'data', sessions{sessid});
@@ -156,10 +156,10 @@ for c=1:length(conditions)
             % ART movement artifacts correction
             session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_(' func_smoothed_prefix '.+)?\.mat$']));
             % Append in the list of sessions for this subject in our big data struct
-            data.conditions{c}.subjects{s}.sessions{end+1} = session;
+            data.groups{g}.subjects{s}.sessions{end+1} = session;
         end % for sessions
     end % for subjects
-end % for conditions
+end % for groups
 
 % ROIs detection
 if length(path_to_roi_maps) > 0
@@ -177,8 +177,8 @@ end
 % Sanity checks
 fprintf('Sanity checks...\n');
 % 1. Check globally that there are any loaded images, else the tree structure is obviously wrong
-if isempty(data.conditions(:)); error('Cannot find any subject group! Please check your dataset directories structure.'); end;
-check_cond = data.conditions{:};
+if isempty(data.groups(:)); error('Cannot find any subject group! Please check your dataset directories structure.'); end;
+check_cond = data.groups{:};
 if isempty(check_cond.subjects(:)); error('Cannot find any subject! Please check your dataset directories structure.'); end;
 check_subj = check_cond.subjects{:}; % MATLAB does not support chaining {:} (eg, a{:}.b{:}) so we need to split this command on several lines...
 if isempty(check_subj.sessions(:)); error('Cannot find any session! Please check your dataset directories structure.'); end;
@@ -191,27 +191,27 @@ if length(check_sess.files.func) == 0
 end
 
 % 2. Check for each group, subject and session that there are both structural and functional images
-for c=1:length(data.conditions)
-    if ~isfield(data.conditions{c}, 'subjects') || isempty(data.conditions{c}.subjects); error('No subjects for group %s. Please check your dataset structure.', data.conditions{c}.id); end;
-    for s=1:length(data.conditions{c}.subjects)
-        if ~isfield(data.conditions{c}.subjects{s}, 'sessions') || isempty(data.conditions{c}.subjects{s}.sessions); error('No sessions for group %s subject %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id); end;
-        for sessid=1:length(data.conditions{c}.subjects{s}.sessions)
-            subjfile = data.conditions{c}.subjects{s}.sessions{sessid}.files;
-            if isempty(subjfile.struct); error('No structural image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
-            if isempty(subjfile.func); error('No functional image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
-            if isempty(subjfile.roi.grey); error('No segmented grey matter image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
-            if isempty(subjfile.roi.white); error('No segmented white matter image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
-            if isempty(subjfile.roi.csf); error('No segmented csf matter image found for group %s subject %s session %s. Please check your dataset structure.', data.conditions{c}.id, data.conditions{c}.subjects{s}.id, data.conditions{c}.subjects{s}.sessions{sessid}.id); end;
+for g=1:length(data.groups)
+    if ~isfield(data.groups{g}, 'subjects') || isempty(data.groups{g}.subjects); error('No subjects for group %s. Please check your dataset structure.', data.groups{g}.id); end;
+    for s=1:length(data.groups{g}.subjects)
+        if ~isfield(data.groups{g}.subjects{s}, 'sessions') || isempty(data.groups{g}.subjects{s}.sessions); error('No sessions for group %s subject %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id); end;
+        for sessid=1:length(data.groups{g}.subjects{s}.sessions)
+            subjfile = data.groups{g}.subjects{s}.sessions{sessid}.files;
+            if isempty(subjfile.struct); error('No structural image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+            if isempty(subjfile.func); error('No functional image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+            if isempty(subjfile.roi.grey); error('No segmented grey matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+            if isempty(subjfile.roi.white); error('No segmented white matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+            if isempty(subjfile.roi.csf); error('No segmented csf matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
         end % end for sessions
     end % end for subjects
 end % end for groups
 
 % 3. Check if the number of sessions is consistent for all subjects (the number of sessions can be different per subject but it's good to notify the user in case this is a mistake)
-count_sessions = length(data.conditions{1}.subjects{1}.sessions);
-for c=1:length(conditions)
-    for s=1:length(subjects{c}.names)
-        if count_sessions ~= length(data.conditions{c}.subjects{s}.sessions)
-            fprintf('Warning: Different number of sessions between subjects, please check them! Condition %s subject %s has %i sessions, condition %s subject %s has %i sessions.\n', conditions{1}, subjects{1}.names{1}, length(data.conditions{1}.subjects{1}.sessions), conditions{c}, subjects{c}.names{s}, length(data.conditions{c}.subjects{s}.sessions));
+count_sessions = length(data.groups{1}.subjects{1}.sessions);
+for g=1:length(groups)
+    for s=1:length(subjects{g}.names)
+        if count_sessions ~= length(data.groups{g}.subjects{s}.sessions)
+            fprintf('Warning: Different number of sessions between subjects, please check them! group %s subject %s has %i sessions, group %s subject %s has %i sessions.\n', groups{1}, subjects{1}.names{1}, length(data.groups{1}.subjects{1}.sessions), groups{g}, subjects{g}.names{s}, length(data.groups{g}.subjects{s}.sessions));
         end
     end
 end
@@ -254,12 +254,12 @@ CONN_x.Setup.masks.White = {};
 CONN_x.Setup.masks.CSF = {};
 % Main filling loop
 % We transfer everything we detected to a new batch struct with the structure expected by conn_batch (this is sort of a struct translation/conversion call it whatever you want)
-sid = 0; % subject counter, because we need to add them all in a row in CONN, we assign conditions later
-for c=1:length(conditions)
-    for s=1:length(subjects{c}.names)
-        sid = sid + 1; % We need to continue the subjects counter after switch to next condition, but subject counter s will go back to 0, hence the sid which is the CONN subject's id
-        sessions = data.conditions{c}.subjects{s}.sessions;
-        for sessid=1:length(data.conditions{c}.subjects{s}.sessions)
+sid = 0; % subject counter, because we need to add them all in a row in CONN, we assign groups later
+for g=1:length(groups)
+    for s=1:length(subjects{g}.names)
+        sid = sid + 1; % We need to continue the subjects counter after switch to next group, but subject counter s will go back to 0, hence the sid which is the CONN subject's id
+        sessions = data.groups{g}.subjects{s}.sessions;
+        for sessid=1:length(data.groups{g}.subjects{s}.sessions)
             % Structural and functional images
             if length(CONN_x.Setup.structurals) < sid % extend and init if adding a new subject
                 CONN_x.Setup.structurals{sid} = {};
@@ -275,26 +275,25 @@ for c=1:length(conditions)
             CONN_x.Setup.covariates.files{1}{sid}{sessid} = sessions{sessid}.files.covars1.movement;
         end % for sessions
     end % for subjects
-end % for conditions
+end % for groups
 
 % SUBJECTS GROUPS
 fprintf('Loading groups...\n');
-CONN_x.Setup.subjects.group_names = conditions;
+CONN_x.Setup.subjects.group_names = groups;
 CONN_x.Setup.subjects.groups = [];
-for c=1:length(conditions)
-    CONN_x.Setup.subjects.groups = [CONN_x.Setup.subjects.groups ones(1, length(subjects{c}.names))*c];
+for g=1:length(groups)
+    CONN_x.Setup.subjects.groups = [CONN_x.Setup.subjects.groups ones(1, length(subjects{g}.names))*g];
 end
 CONN_x.Setup.subjects.effect_names = {'AllSubjects'};
 CONN_x.Setup.subjects.effects{1} = ones(1, subjects_total);
 
 % CONDITIONS DURATION
 % Here, we want to look at the difference between the sessions (pre-post kind of experiment), so the different conditions are considered to be the difference between the sessions, so the conditions are the same as the sessions
-% This automatic configuration of conditions can be disabled to allow for more flexible experiments (eg, with different number of sessions per subject).
 if disable_conditions == 0
     % Count maximum number of sessions
     max_count_sessions = 0;
-    for c=1:length(conditions), for s=1:length(subjects{c}.names)
-        nb_sess = length(data.conditions{c}.subjects{s}.sessions);
+    for g=1:length(groups), for s=1:length(subjects{g}.names)
+        nb_sess = length(data.groups{g}.subjects{s}.sessions);
         if nb_sess > max_count_sessions
             max_count_sessions = nb_sess;
         end
