@@ -33,6 +33,7 @@ function conn_subjects_loader()
 % * support BIDS format
 % * really support CONN v17 (the project can be built but then the processing of voxel-to-voxel fails!)
 % * support TR per subject (as a vector? in a text file inside subject's folder?)
+% * Implement modification/updating of previous CONN projects by using conn_batch (eg, conn_batch('Setup.functionals',myfiles);) instead of first creating a struct (which always overwrites the whole project). See http://www.nitrc.org/forum/forum.php?thread_id=7382&forum_id=1144
 %
 
 % ------ PARAMETERS HERE
