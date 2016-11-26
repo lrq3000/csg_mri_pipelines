@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a, preliminary support for conn17a
-% v0.10.3
+% v0.10.4
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016 Stephen Larroque
@@ -44,7 +44,8 @@ root_path = 'D:\Stephen\DataToPreproc\ESA_Cosmonauts\ESA_session3';
 path_to_spm = 'C:\matlab_tools\spm12';
 path_to_conn = 'C:\matlab_tools\conn16a';
 path_to_roi_maps = 'C:\GigaData\ESA\Athena_rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
-func_smoothed_prefix = 's8rwa'; % prefix of the smoothed motion corrected images that we need to remove to get the filename of the original, unsmoothed functional image. This is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
+func_smoothed_prefix = 's8rwa'; % prefix of the functional images you want to use (generally the smoothed motion corrected functional images)
+roiextract_type = 3; % extract ROI from what kind of functional images? 1: smoothed images (same files as for the rest of the analysis) ; 2: raw images by stripping the SPM smoothing prefix 's' ; 3: raw images by stripping the smoothing prefix specified above ; 4: other files (NOT SUPPORTED in this script yet). Why use 2 or 3? From CONN's manual, it is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
 struct_norm_prefix = 'wmr'; % prefix for the (MNI) normalized structural image.
 struct_segmented_grey_prefix = 'm0wrp1'; % prefix for segmented structural grey matter.
 struct_segmented_white_prefix = 'm0wrp2'; % idem for white matter.
@@ -347,9 +348,9 @@ end
 
 % ROI-level BOLD timeseries extraction: reuse smoothed functional images or use raw images?
 % See for more info: http://www.nitrc.org/forum/forum.php?thread_id=4515&forum_id=1144
-if isempty(func_smoothed_prefix) == 0
-    CONN_x.Setup.roifunctionals.roiextract = 1;
-else
+if roiextract_type ~= 3
+    CONN_x.Setup.roifunctionals.roiextract = roiextract_type;
+elseif roiextract_type == 3 && ~isempty(func_smoothed_prefix)
     CONN_x.Setup.roifunctionals.roiextract = 3;
     CONN_x.Setup.roifunctionals.roiextract_rule = {};
     CONN_x.Setup.roifunctionals.roiextract_rule{1} = 1; % work on filename, not on absolute path
