@@ -38,7 +38,7 @@ function conn_subjects_loader()
 
 % ------ PARAMETERS HERE
 TR = 2.0;
-conn_file = fullfile(pwd, 'conn_project_esa.mat');  % where to store the temporary project file that will be used to load the subjects into CONN
+conn_file = fullfile(pwd, 'conn_project_esa_noraw.mat');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
 conn_ver = 16; % Put here the CONN version you use (just the number, not the letter)
 root_path = 'D:\Stephen\DataToPreproc\ESA_Cosmonauts\ESA_session3';
 path_to_spm = 'C:\matlab_tools\spm12';
@@ -49,6 +49,7 @@ struct_norm_prefix = 'wmr'; % prefix for the (MNI) normalized structural image.
 struct_segmented_grey_prefix = 'm0wrp1'; % prefix for segmented structural grey matter.
 struct_segmented_white_prefix = 'm0wrp2'; % idem for white matter.
 struct_segmented_csf_prefix = 'm0wrp3'; % idem for csf.
+nb_first_volumes_to_remove = 4; % number of functional volumes to remove, to reduce the fMRI coil calibration bias at the start of the acquisition (ie, the fMRI scanner needs an exponentially decreasing time to calibrate at the beginning, generally 3-4 volumes). Set 0 to disable. NOTE: works only with multi-files nifti *.img/*.hdr (NOT with 4D nifti yet!).
 automate = 0; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
 resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted. Note that resume can also be used to add new subjects without reprocessing old ones.
 run_dynamicfc = 0; % run Dynamic Functional Connectivity analysis? BEWARE: it may fail. This script tries to setup the experiment correctly so that DFC runs, but it may still fail for no obvious reason!
@@ -156,6 +157,10 @@ for g=1:length(groups)
             % Covariates 1st-level
             % ART movement artifacts correction
             session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_(' func_smoothed_prefix '.+)?\.mat$']));
+            % Remove first x functional volumes (to avoid fMRI coil gradient calibration bias)
+            if nb_first_volumes_to_remove > 0
+                session.files.func = session.files.func(nb_first_volumes_to_remove+1:end);
+            end
             % Append in the list of sessions for this subject in our big data struct
             data.groups{g}.subjects{s}.sessions{end+1} = session;
         end % for sessions
@@ -342,7 +347,7 @@ end
 
 % ROI-level BOLD timeseries extraction: reuse smoothed functional images or use raw images?
 % See for more info: http://www.nitrc.org/forum/forum.php?thread_id=4515&forum_id=1144
-if length(func_smoothed_prefix) == 0
+if isempty(func_smoothed_prefix) == 0
     CONN_x.Setup.roifunctionals.roiextract = 1;
 else
     CONN_x.Setup.roifunctionals.roiextract = 3;
