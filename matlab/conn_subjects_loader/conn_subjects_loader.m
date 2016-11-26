@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a, preliminary support for conn17a
-% v0.10.2
+% v0.10.3
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016 Stephen Larroque
