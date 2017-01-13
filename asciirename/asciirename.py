@@ -38,7 +38,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.4'
+__version__ = '0.5'
 
 import argparse
 import os
@@ -102,7 +102,7 @@ def fullpath(relpath):
         relpath = relpath.name
     return os.path.abspath(os.path.expanduser(relpath))
 
-def recwalk(inputpath, sorting=True, topdown=True):
+def recwalk(inputpath, sorting=True, folders=False, topdown=True):
     '''Recursively walk through a folder. This provides a mean to flatten out the files restitution (necessary to show a progress bar). This is a generator.'''
     # If it's only a single file, return this single file
     if os.path.isfile(inputpath):
@@ -113,52 +113,14 @@ def recwalk(inputpath, sorting=True, topdown=True):
         for dirpath, dirs, files in walk(inputpath, topdown=topdown):	
             if sorting:
                 files.sort()
-                dirs.sort() # sort directories in-place for ordered recursive walking
+                dirs.sort()  # sort directories in-place for ordered recursive walking
+            # return each file
             for filename in files:
-                yield (dirpath, filename) # return directory (full path) and filename
-            for folder in dirs:
-                yield (dirpath, folder)
-
-def remove_if_exist(path):  # pragma: no cover
-    """Delete a file or a directory recursively if it exists, else no exception is raised"""
-    if os.path.exists(path):
-        if os.path.isdir(path):
-            shutil.rmtree(path)
-            return True
-        elif os.path.isfile(path):
-            os.remove(path)
-            return True
-    return False
-
-def create_dir_if_not_exist(path):  # pragma: no cover
-    """Create a directory if it does not already exist, else nothing is done and no error is return"""
-    if not os.path.exists(path):
-        os.makedirs(path)
-
-def copy_any(src, dst, only_missing=False):  # pragma: no cover
-    """Copy a file or a directory tree, deleting the destination before processing"""
-    if not only_missing:
-        remove_if_exist(dst)
-    if os.path.exists(src):
-        if os.path.isdir(src):
-            if not only_missing:
-                shutil.copytree(src, dst, symlinks=False, ignore=None)
-            else:
-                for dirpath, filepath in recwalk(src):
-                    srcfile = os.path.join(dirpath, filepath)
-                    relpath = os.path.relpath(srcfile, src)
-                    dstfile = os.path.join(dst, relpath)
-                    if not os.path.exists(dstfile):
-                        create_dir_if_not_exist(os.path.dirname(dstfile))
-                        shutil.copyfile(srcfile, dstfile)
-                        shutil.copystat(srcfile, dstfile)
-            return True
-        elif os.path.isfile(src) and (not only_missing or not os.path.exists(dst)):
-            create_dir_if_not_exist(os.path.dirname(dst))
-            shutil.copyfile(src, dst)
-            shutil.copystat(src, dst)
-            return True
-    return False
+                yield (dirpath, filename)  # return directory (full path) and filename
+            # return each directory
+            if folders:
+                for folder in dirs:
+                    yield (dirpath, folder)
 
 
 
@@ -276,7 +238,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     print("Renaming from root path %s" % rootfolderpath)
     count_files = 0
     count_renamed_files = 0
-    for dirpath, filename in recwalk(unicode(rootfolderpath), topdown=False):  # IMPORTANT: need to supply a unicode path to os.walk in order to get back unicode filenames! Also need to walk the tree bottom-up (from leaf to root), else if we change the directories names before the dirs/files they contain, we won't find them anymore!
+    for dirpath, filename in recwalk(unicode(rootfolderpath), folders=True, topdown=False):  # IMPORTANT: need to supply a unicode path to os.walk in order to get back unicode filenames! Also need to walk the tree bottom-up (from leaf to root), else if we change the directories names before the dirs/files they contain, we won't find them anymore!
         count_files += 1
         if verbose: print("- Processing file %s\n" % os.path.join(dirpath, filename))
         # convert unicode string to ascii (ie, convert accentuated characters to their non-accentuated counterparts)
