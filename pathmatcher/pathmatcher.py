@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.9.8'
+__version__ = '0.9.9'
 
 import argparse
 import os
@@ -227,6 +227,35 @@ def copy_any(src, dst, only_missing=False, symlink=False):  # pragma: no cover
                 symbolic_copy(src, dst)
             else:
                 real_copy(src, dst)
+            return True
+    return False
+
+def move_any(src, dst, only_missing=False):  # pragma: no cover
+    """Move a file or a directory tree, deleting the destination before processing."""
+    def real_move(srcfile, dstfile):
+        """Move a file or a folder and keep stats"""
+        shutil.move(srcfile, dstfile)
+
+    # Delete destination folder/file if it exists
+    if not only_missing:
+        remove_if_exist(dst)
+    # Continue only if source exists
+    if os.path.exists(src):
+        # If it's a folder, recursively copy its content
+        if os.path.isdir(src):
+            # We will check each file and add only new ones (present in source but absent from destination)
+            for dirpath, filepath in recwalk(src):
+                srcfile = os.path.join(dirpath, filepath)
+                relpath = os.path.relpath(srcfile, src)
+                dstfile = os.path.join(dst, relpath)
+                if not only_missing or not os.path.exists(dstfile):  # only_missing -> dstfile must not exist
+                    create_dir_if_not_exist(os.path.dirname(dstfile))
+                    real_move(srcfile, dstfile)
+            return True
+        # Else it is a single file, copy the file
+        elif os.path.isfile(src) and (not only_missing or not os.path.exists(dst)):
+            create_dir_if_not_exist(os.path.dirname(dst))
+            real_move(src, dst)
             return True
     return False
 
@@ -579,7 +608,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
             if outputpath:
                 fulloutpath = os.path.join(rootoutpath, outfilepath)
                 if movefast_mode:  # movefast: just move the file/directory tree
-                    shutil.move(fullinpath, fulloutpath)
+                    move_any(fullinpath, fulloutpath)
                 else:  # else we first copy in any case, then delete old file if move_mode
                     copy_any(fullinpath, fulloutpath, only_missing=only_missing, symlink=True if symlink_mode else False)  # copy file
                     if move_mode:  # if move mode, then delete the old file. Copy/delete is safer than move because we can ensure that the file is fully copied (metadata/stats included) before deleting the old
