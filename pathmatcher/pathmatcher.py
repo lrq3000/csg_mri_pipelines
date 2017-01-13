@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.9.6'
+__version__ = '0.9.8'
 
 import argparse
 import os
@@ -135,7 +135,7 @@ def fullpath(relpath):
         relpath = relpath.name
     return os.path.abspath(os.path.expanduser(relpath))
 
-def recwalk(inputpath, sorting=True):
+def recwalk(inputpath, sorting=True, folders=False, topdown=True):
     """Recursively walk through a folder. This provides a mean to flatten out the files restitution (necessary to show a progress bar). This is a generator."""
     # If it's only a single file, return this single file
     if os.path.isfile(inputpath):
@@ -143,12 +143,17 @@ def recwalk(inputpath, sorting=True):
         yield os.path.dirname(abs_path), os.path.basename(abs_path)
     # Else if it's a folder, walk recursively and return every files
     else:
-        for dirpath, dirs, files in walk(inputpath):	
+        for dirpath, dirs, files in walk(inputpath, topdown=topdown):	
             if sorting:
                 files.sort()
-                dirs.sort() # sort directories in-place for ordered recursive walking
+                dirs.sort()  # sort directories in-place for ordered recursive walking
+            # return each file
             for filename in files:
-                yield (dirpath, filename) # return directory (full path) and filename
+                yield (dirpath, filename)  # return directory (full path) and filename
+            # return each directory
+            if folders:
+                for folder in dirs:
+                    yield (dirpath, folder)
 
 def path2unix(path, nojoin=False, fromwinpath=False):
     """From a path given in any format, converts to posix path format
@@ -344,6 +349,8 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
                         help='Copy with a symbolic/soft link the matched input paths to the regex-substituted output paths (works only on Linux).')
     main_parser.add_argument('-m', '--move', action='store_true', required=False, default=False,
                         help='Move the matched input paths to the regex-substituted output paths.')
+    main_parser.add_argument('--move_fast', action='store_true', required=False, default=False,
+                        help='Move the matched input paths to the regex-substituted output paths, without checking first that the copy was done correctly.')
     main_parser.add_argument('-d', '--delete', action='store_true', required=False, default=False,
                         help='Delete the matched files.')
 
@@ -381,6 +388,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     copy_mode = args.copy
     symlink_mode = args.symlink
     move_mode = args.move
+    movefast_mode = args.move_fast
     delete_mode = args.delete
     test_flag = args.test
     yes_flag = args.yes
@@ -407,11 +415,11 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     if not os.path.isdir(rootfolderpath):
         raise NameError('Specified input path does not exist. Please check the specified path')
 
-    if sum([1 if elt == True else 0 for elt in [copy_mode, symlink_mode, move_mode, delete_mode]]) > 1:
+    if sum([1 if elt == True else 0 for elt in [copy_mode, symlink_mode, move_mode, movefast_mode, delete_mode]]) > 1:
         raise ValueError('Cannot set multiple modes simultaneously, please choose only one!')
 
-    if (copy_mode or symlink_mode or move_mode) and not outputpath:
-        raise ValueError('--copy or --symlink or --move specified but no --output !')
+    if (copy_mode or symlink_mode or move_mode or movefast_mode) and not outputpath:
+        raise ValueError('--copy or --symlink or --move or --move_fast specified but no --output !')
 
     # -- Configure the log file if enabled (ptee.write() will write to both stdout/console and to the log file)
     if args.log:
@@ -451,7 +459,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     # == FILES WALKING AND MATCHING/SUBSTITUTION STEP
     files_list = []  # "to copy" files list, stores the list of input files and their corresponding output path (computed using regex)
     ptee.write("Computing paths matching and simulation report, please wait (total time depends on files count - filesize has no influence). Press CTRL+C to abort\n")
-    for dirpath, filename in tqdm(recwalk(inputpath), unit='files', leave=True, smoothing=0):
+    for dirpath, filename in tqdm(recwalk(inputpath, topdown=False), unit='files', leave=True, smoothing=0):
         # Get full absolute filepath and relative filepath from base dir
         filepath = os.path.join(dirpath, filename)
         relfilepath = path2unix(os.path.relpath(filepath, rootfolderpath)) # File relative path from the root (we truncate the rootfolderpath so that we can easily check the files later even if the absolute path is different)
@@ -544,7 +552,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
         open_with_default_app(reportpath)
 
     # == COPY/MOVE STEP
-    if files_list and ( delete_mode or ((copy_mode or symlink_mode or move_mode) and outputpath) ):
+    if files_list and ( delete_mode or ((copy_mode or symlink_mode or move_mode or movefast_mode) and outputpath) ):
         # -- USER NOTIFICATION AND VALIDATION
         # Notify user of conflicts
         ptee.write("\n")
@@ -570,9 +578,12 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
             fullinpath = os.path.join(rootfolderpath, infilepath)
             if outputpath:
                 fulloutpath = os.path.join(rootoutpath, outfilepath)
-                copy_any(fullinpath, fulloutpath, only_missing=only_missing, symlink=True if symlink_mode else False)  # copy file
-                if move_mode:  # if move mode, then delete the old file. Copy/delete is safer than move because we can ensure that the file is fully copied (metadata/stats included) before deleting the old
-                    remove_if_exist(fullinpath)
+                if movefast_mode:  # movefast: just move the file/directory tree
+                    shutil.move(fullinpath, fulloutpath)
+                else:  # else we first copy in any case, then delete old file if move_mode
+                    copy_any(fullinpath, fulloutpath, only_missing=only_missing, symlink=True if symlink_mode else False)  # copy file
+                    if move_mode:  # if move mode, then delete the old file. Copy/delete is safer than move because we can ensure that the file is fully copied (metadata/stats included) before deleting the old
+                        remove_if_exist(fullinpath)
             if delete_mode:  # if delete mode, ensure that the original file is deleted!
                 remove_if_exist(fullinpath)
 
