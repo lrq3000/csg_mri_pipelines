@@ -240,7 +240,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     count_renamed_files = 0
     for dirpath, filename in recwalk(unicode(rootfolderpath), folders=True, topdown=False):  # IMPORTANT: need to supply a unicode path to os.walk in order to get back unicode filenames! Also need to walk the tree bottom-up (from leaf to root), else if we change the directories names before the dirs/files they contain, we won't find them anymore!
         count_files += 1
-        if verbose: print("- Processing file %s\n" % os.path.join(dirpath, filename))
+        if verbose: print("\n- Processing file %s\n" % os.path.join(dirpath, filename))
         # convert unicode string to ascii (ie, convert accentuated characters to their non-accentuated counterparts)
         ascii_filename = unidecode(filename)
         # strip quotes and double quotes
