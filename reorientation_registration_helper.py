@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.0'
+__version__ = '1.2.1'
 
 import argparse
 import os
@@ -441,6 +441,9 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 # Build full absolute path for MATLAB
                 im_anat = os.path.join(rootfolderpath, im_anat)
                 im_func = os.path.join(rootfolderpath, im_func)
+                # Basic support for 4D nifti: select the first image
+                if len(im_table[im_key]['func']) == 1:
+                    im_func += ',1'
                 # Send to MATLAB checkreg!
                 matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                 matlab.spm_check_registration(im_anat, im_func)
