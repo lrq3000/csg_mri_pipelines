@@ -1,12 +1,12 @@
 # vim:ts=4 sw=4 expandtab softtabstop=4
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import optparse
 import locale
 import os
 import sys
 import warnings
 
-from unidecode import unidecode
+from . import unidecode
 
 PY3 = sys.version_info[0] >= 3
 
