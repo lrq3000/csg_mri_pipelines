@@ -38,23 +38,26 @@
 
 from __future__ import print_function
 
-__version__ = '0.5'
+__version__ = '0.6'
+
+import os, sys
+cur_path = os.path.realpath('.')
+sys.path.append(cur_path)  # for unidecode, because it does not support relative paths (yet? they need to use __import__(path, globals(), level=2))
 
 import argparse
-import os
 import shlex
 import shutil
-import sys
+import warnings
 
 try:
     # to convert unicode accentuated strings to ascii
-    from unidecode import unidecode
+    from .unidecode import unidecode
 except ImportError:
     # native alternative but may remove quotes and some characters (and be slower?)
     import unicodedata
     def unidecode(s):
         return unicodedata.normalize('NFKD', s).encode('ascii', 'ignore')
-    print("Notice: for reliable ascii conversion, you should pip install unidecode. Falling back to native unicodedata lib.")
+    warnings.warn("Notice: for reliable ascii conversion, you should pip install unidecode. Falling back to native unicodedata lib.", RuntimeWarning, 2)
 
 try:
     from scandir import walk # use the faster scandir module if available (Python >= 3.5), see https://github.com/benhoyt/scandir
