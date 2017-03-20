@@ -18,10 +18,10 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a, preliminary support for conn17a
-% v0.10.4
+% v0.10.5
 %
 % Licensed under MIT LICENSE
-% Copyleft 2016 Stephen Larroque
+% Copyleft 2016-2017 Stephen Larroque
 % Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 % The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 % THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
@@ -32,15 +32,14 @@ function conn_subjects_loader()
 % * save an example CONN_x into .mat to show the expected structure (useful if need to debug).
 % * support BIDS format
 % * really support CONN v17 (the project can be built but then the processing of voxel-to-voxel fails!)
-% * support TR per subject (as a vector? in a text file inside subject's folder?)
 % * Implement modification/updating of previous CONN projects by using conn_batch (eg, conn_batch('Setup.functionals',myfiles);) instead of first creating a struct (which always overwrites the whole project). See http://www.nitrc.org/forum/forum.php?thread_id=7382&forum_id=1144
 %
 
 % ------ PARAMETERS HERE
-TR = 2.0;
-conn_file = fullfile(pwd, 'conn_project_esa_noraw.mat');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
+TR = 2.0;  % can also input a vector if your subjects have different TR, eg: [ 2.0 2.15*ones(1, 14) 2.15*ones(1, 13) ]
+conn_file = fullfile(pwd, 'conn_project.mat');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
 conn_ver = 16; % Put here the CONN version you use (just the number, not the letter)
-root_path = 'D:\Stephen\DataToPreproc\ESA_Cosmonauts\ESA_session3';
+root_path = 'G:\Topreproc\some-study\';
 path_to_spm = 'C:\matlab_tools\spm12';
 path_to_conn = 'C:\matlab_tools\conn16b'; % avoid CONN16a, gives weird results (and sanity checks for DMN do not pass)
 path_to_roi_maps = 'C:\GigaData\ESA\Athena_rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
@@ -240,7 +239,11 @@ CONN_x.Setup.isnew = 1;  % tell CONN that this is a new project we will complete
 if resume_job == 1, CONN_x.Setup.isnew = 0; end;
 CONN_x.Setup.done = 0;  % do not execute any task, just fill the fields
 CONN_x.Setup.nsubjects = subjects_total;
-CONN_x.Setup.RT = ones(1, subjects_total) * TR;
+if isscalar(TR)
+    CONN_x.Setup.RT = ones(1, subjects_total) * TR;
+else
+    CONN_x.Setup.RT = TR;
+end %endif
 CONN_x.Setup.acquisitiontype = 1; % continuous
 CONN_x.Setup.analyses=1:4; % set the type of analyses to run (basically: all)
 CONN_x.Setup.voxelresolution = 1; % set voxel resolution to the default, normalized template (2 for structurals, 3 for functionals)
