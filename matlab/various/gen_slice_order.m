@@ -3,7 +3,7 @@ function res=gen_slice_order(nslices, hstep, vstep, slice_order, unroll, multi, 
 % Compute a 2D slice order scheme based on given parameters
 % slice_order can either be 'asc' or 'desc'.
 % multi > 0 enables multiband EPI. multi can be either 1 for rows or 2 for columns. This will return time points in seconds instead of slice number without multiband.
-% tr (in seconds) > 0 will return slice time offsets instead of slice number.
+% tr (in seconds) > 0 will return slice time offsets (in ms, as expected by spm) instead of slice number.
 % slice_ids is optional, you can provide your own custom slice indices with this argument, very useful for multiband with non linear schemes (if this exists?).
 % by Stephen Larroque from the Coma Science Group, 2017
 % Licensed under MIT.
@@ -59,7 +59,7 @@ end %endif
 
 if tr > 0
     % Convert to time offset seconds
-    res = (res-1) .* (tr/max(max(res)));
+    res = (res-1) .* (tr.*1000/max(max(res)));
 end
 
 % Unroll if necessary into one horizontal vector (as required by SPM)
