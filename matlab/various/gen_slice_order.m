@@ -64,14 +64,16 @@ end
 
 % Unroll if necessary into one horizontal vector (as required by SPM)
 if unroll
-    if multi == 0
-        res = res';
-        res = res(:)';
+    if tr <= 0
+        % Slice indices, we can just unroll the matrix into a vector
+        res = res';  % our matrix is made to have one acquisition session per row, but matlab unrolls per column, so we need to transpose
+        res = res(:)'; % transpose back to get a row vector
     else
-        % For multiband EPI, we use the index
+        % When using time offsets, we need to reorder the results in natural order (ie, 1 to nslices), with the time offset for respectively each slice id
+        % Very useful for multiband EPI (SPM only supports time offsets for multiband EPI slice timing correction)
         [vals, idx] = sort(slice_ids(:));
         res = res(:);
-        res = res(idx);
+        res = res(idx)';
     end %endif
 end %endif
 
