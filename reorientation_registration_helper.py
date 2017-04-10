@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # reorientation_registration_helper.py
-# Copyright (C) 2016 Larroque Stephen
+# Copyright (C) 2016-2017 Larroque Stephen
 #
 # Licensed under the MIT License (MIT)
 #
@@ -272,7 +272,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     if regex_anat is None:
         regex_anat = r'(\dir)/(\dir)/data/(\dir/)?mprage/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/mprage/struct.(img|nii)
     if regex_func is None:
-        regex_func = r'(\dir)/(\dir)/data/(\dir/)?rest/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/mprage/func_01.(img|nii)
+        regex_func = r'(\dir)/(\dir)/data/(\dir/)?rest/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/rest/func_01.(img|nii)
 
     # -- Preprocess regular expression to add aliases
     # Directory alias
@@ -442,8 +442,8 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 im_anat = os.path.join(rootfolderpath, im_anat)
                 im_func = os.path.join(rootfolderpath, im_func)
                 # Basic support for 4D nifti: select the first image
-                if len(im_table[im_key]['func']) == 1:
-                    im_func += ',1'
+                #if len(im_table[im_key]['func']) == 1:
+                im_func += ',1'
                 # Send to MATLAB checkreg!
                 matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                 matlab.spm_check_registration(im_anat, im_func)
