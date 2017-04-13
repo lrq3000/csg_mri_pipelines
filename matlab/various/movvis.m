@@ -1,6 +1,9 @@
 function movvis(root_path)
 % Movement visualization of all subjects after preprocessing with ART
-% Folders tree structure must correspond to Cyclotron's standard layout.
+% Folders tree structure must correspond to conn subjects loader expected structure (Condition/Subject/data/Session/restMotionCorrected/rp_*.txt)
+% v1.0
+% by Stephen Larroque 2016-2017
+% License MIT
 
 close all;
 
@@ -19,47 +22,61 @@ end
 
 list_files = {};
 sid = 0;
+% For each group
 for c=1:length(conditions)
+    % For each subject
     for s=1:length(subjects{c}.names)
         sid = sid + 1;
         sname = subjects{c}.names{s};
-        spath = fullfile(root_path, conditions{c}, sname, 'data', 'rest', 'restMotionCorrected');
-        sfile = regex_files(spath, '^rp_.+\.txt$');
+        datapath = fullfile(root_path, conditions{c}, sname, 'data');
 
-        list_files{sid} = struct('condition', conditions{c}, ...
-                                'name', sname, ...
-                                'file', sfile);
+        % For each session
+        sessions = get_dirnames(datapath);
+        for isess=1:length(sessions)
+            spath = fullfile(datapath, sessions{isess}, 'rest', 'restMotionCorrected');
+            % Extract realign motion txt file (from SPM)
+            sfile = regex_files(spath, '^rp_.+\.txt$');
+
+            % Add this file only if found (eg, do not add mprage folders)
+            if ~isempty(sfile)
+                list_files{sid} = struct('condition', conditions{c}, ...
+                                        'name', sname, ...
+                                        'session', sessions{isess}, ...
+                                        'file', sfile);
+            end
+        end
     end
 end
 
 % Compute the number of colums per row (we want to have a square like shape)
-total_subjects = length(list_files);
-width = ceil(sqrt(total_subjects));
-height = ceil(total_subjects / width);
+total_files = length(list_files);
+width = ceil(sqrt(total_files));
+height = ceil(total_files / width);
 % Display multiple subjects as subplot on the same figure
 figure(1); suptitle('Translation (in mm)');
 figure(2); suptitle('Rotation (in rad)');
-for s=1:ceil(total_subjects)
+%for s=1:ceil(total_subjects)
+for sid=1:length(list_files)
     % Load ART movement data
-    mov_data = importdata(list_files{s}.file);
+    mov_data = importdata(list_files{sid}.file);
 
     % Plot translation (x,y,z in mm)
     figure(1);
     %i = 1 + floor(s / width);
     %j = mod(s, width);
-    subplot(height, width, s);
+    subplot(height, width, sid);
     plot(mov_data(:,1:3)); % x, y, z translation in mm
     xlabel('Volume number');
     ylabel('mm');
-    title(['Subject ' list_files{s}.name ' cond ' list_files{s}.condition]);
+    title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session]);
 
     % Plot rotation (tx, ty, tz in radians)
     figure(2);
-    subplot(height, width, s);
+    subplot(height, width, sid);
     plot(mov_data(:,4:6)); % tx, ty, tz rotation in radians
     xlabel('Volume number');
     ylabel('rad');
-    title(['Subject ' list_files{s}.name ' cond ' list_files{s}.condition]);
+    title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session]);
 end
 
 % Set one legend for all the subplots, and place it outside the last subplot (because the subplots will probably be small, with the legend over it would be impossible to see anything)
