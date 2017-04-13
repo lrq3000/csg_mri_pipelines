@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a, preliminary support for conn17a
-% v0.10.5
+% v0.10.6
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016-2017 Stephen Larroque
@@ -127,26 +127,40 @@ for g=1:length(groups)
                                                 );
         % Find the sessions
         sessions = get_dirnames(fullfile(spath, 'data'));
+        sessions = sessions(~strcmp(sessions, 'mprage')); % exclude mprage (shared structural folder)
 
         for sessid=1:length(sessions)
             % Print status
             fprintf('Detect images for subject %i/%i session %i/%i (%s %s %s)...\n', sid, subjects_real_total, sessid, length(sessions), groups{g}, sname, sessions{sessid});
 
             % Get path to images (inside each session)
-            sesspath = fullfile(spath, 'data', sessions{sessid});
+            datapath = fullfile(spath, 'data');
+            sesspath = fullfile(datapath, sessions{sessid});
 
             % Init session data struct
             session = struct('id', sessions{sessid}, ...
+                             'isstructshared', false, ...
                              'files', struct('struct', [], ...
                                              'func', [], ...
                                              'roi', [])); % Note: NEVER init with {}, always with [] because else the struct will be considered empty and unmodifiable! (famous errors: ??? A dot name structure assignment is illegal when the structure is empty. or ??? Error using ==> end)
 
             % Get full filepaths of all images
             structpath = getimgpath(sesspath, 'struct');
+            isstructshared = false;
+            if ~exist(structpath, 'dir')
+                % If there is no per session structural image, get a shared image (shared across sessions)
+                structpath = getimgpath(datapath, 'struct');
+                isstructshared = true;
+                if ~exist(structpath, 'dir')
+                    error('Error: No structural mprage directory for subject %s.', sname);
+                end
+            end
             funcpath = getimgpath(sesspath, 'func'); % do not use the func_motion_corrected subdirectory to find smoothed func images, because we need both the smoothed motion corrected images AND the original images for CONN to work best
             funcmotpath = getimgpath(sesspath, 'func_motion_corrected');
+
             % Save the structural images
             session.files.struct = check_exist(regex_files(structpath, ['^' struct_norm_prefix '.+\.(img|nii)$']));
+            session.isstructshared = isstructshared;
             % Save functional motion artifacts corrected, realigned, smoothed images
             session.files.func = check_exist(regex_files(funcpath, ['^' func_smoothed_prefix '.+\.(img|nii)$']));
             % Save regions of interests (we expect 3 different ROIs: 1,2,3 respectively for grey matter, white matter and CSF)
@@ -270,14 +284,22 @@ for g=1:length(groups)
         sid = sid + 1; % We need to continue the subjects counter after switch to next group, but subject counter s will go back to 0, hence the sid which is the CONN subject's id
         sessions = data.groups{g}.subjects{s}.sessions;
         for sessid=1:length(data.groups{g}.subjects{s}.sessions)
-            % Structural and functional images
+            % Init structural and functional images cell
             if length(CONN_x.Setup.structurals) < sid % extend and init if adding a new subject
                 CONN_x.Setup.structurals{sid} = {};
                 CONN_x.Setup.functionals{sid} = {};
             end
-            CONN_x.Setup.structurals{sid}{sessid} = sessions{sessid}.files.struct;
+            % Add structural images
+            if sessions{sessid}.isstructshared
+                % Structural image is shared across sessions
+                CONN_x.Setup.structurals{sid} = sessions{sessid}.files.struct;
+            else
+                % One struct image per session
+                CONN_x.Setup.structurals{sid}{sessid} = sessions{sessid}.files.struct;
+            end
+            % Add functional images
             CONN_x.Setup.functionals{sid}{sessid} = char(sessions{sessid}.files.func); % convert cell array to char array for CONN
-            % ROI masks
+            % ROI masks (= segmented grey/white/csf images)
             CONN_x.Setup.masks.Grey{sid}{sessid} = sessions{sessid}.files.roi.grey;
             CONN_x.Setup.masks.White{sid}{sessid} = sessions{sessid}.files.roi.white;
             CONN_x.Setup.masks.CSF{sid}{sessid} = sessions{sessid}.files.roi.csf;
