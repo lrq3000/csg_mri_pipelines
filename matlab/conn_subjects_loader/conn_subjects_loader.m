@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h and conn16a, preliminary support for conn17a
-% v0.10.6
+% v0.10.7
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016-2017 Stephen Larroque
@@ -556,9 +556,9 @@ function filelist = check_exist(filelist)
         else
             f = filelist(fi, 1:end);
         end
-        if ~(exist(f, 'file') == 2) or isempty(f)
+        if ~(exist(f, 'file') == 2) || isempty(f)
             msgID = 'check_exist:FileNotFound';
-            msg = sprintf('Error: file not found: %s\n', f);
+            msg = sprintf('Error: file not found: %s\nPlease check if the file exists, or if the path is too long (try to shorten parent folders names).\n', f);
             FileNotFoundException = MException(msgID,msg);
             throw(FileNotFoundException);
         end
