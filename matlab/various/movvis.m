@@ -1,4 +1,5 @@
 function movvis(root_path)
+% movvis(root_path)
 % Movement visualization of all subjects after preprocessing with ART
 % Folders tree structure must correspond to conn subjects loader expected structure (Condition/Subject/data/Session/restMotionCorrected/rp_*.txt)
 % v1.1

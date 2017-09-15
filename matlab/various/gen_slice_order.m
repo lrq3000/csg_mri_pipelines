@@ -75,6 +75,14 @@ if unroll
         res = res(:);
         res = res(idx)';
     end %endif
+    % If number of slices is odd, we have to remove superfluous slice numbers outside of range
+    if mod(nslices, 2) == 1
+        if multi == 0
+            res = res(res>=1 & res<=nslices)
+        else
+            fprintf('Unrolled odd number of slices is not implemented with multiband EPI yet.\n')
+        end
+    end
 end %endif
 
 end %endfunction
