@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # pathmatcher.py
-# Copyright (C) 2016 Larroque Stephen
+# Copyright (C) 2016-2018 Larroque Stephen
 #
 # Licensed under the MIT License (MIT)
 #
@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '0.9.9'
+__version__ = '1.0.0'
 
 import argparse
 import os
@@ -274,7 +274,7 @@ except ImportError as exc:
         def Gooey(func):
             return func
     # If --gui was specified, then there's a problem
-    if len(sys.argv) > 1 and sys.argv[1] == '--gui':  # pragma: no cover
+    if len(sys.argv) == 1 or '--gui' in sys.argv:  # pragma: no cover
         print('ERROR: --gui specified but an error happened with lib/gooey, cannot load the GUI (however you can still use this script in commandline). Check that lib/gooey exists and that you have wxpython installed. Here is the error: ')
         raise(exc)
 
@@ -288,7 +288,7 @@ def conditional_decorator(flag, dec):  # pragma: no cover
 
 def check_gui_arg():  # pragma: no cover
     """Check that the --gui argument was passed, and if true, we remove the --gui option and replace by --gui_launched so that Gooey does not loop infinitely"""
-    if len(sys.argv) > 1 and sys.argv[1] == '--gui':
+    if len(sys.argv) == 1 or '--gui' in sys.argv:
         # DEPRECATED since Gooey automatically supply a --ignore-gooey argument when calling back the script for processing
         #sys.argv[1] = '--gui_launched' # CRITICAL: need to remove/replace the --gui argument, else it will stay in memory and when Gooey will call the script again, it will be stuck in an infinite loop calling back and forth between this script and Gooey. Thus, we need to remove this argument, but we also need to be aware that Gooey was called so that we can call gooey.GooeyParser() instead of argparse.ArgumentParser() (for better fields management like checkboxes for boolean arguments). To solve both issues, we replace the argument --gui by another internal argument --gui_launched.
         return True
@@ -342,7 +342,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     #== Commandline arguments
     #-- Constructing the parser
     # Use GooeyParser if we want the GUI because it will provide better widgets
-    if len(argv) > 0 and (argv[0] == '--gui' and not '--ignore-gooey' in argv):  # pragma: no cover
+    if (len(argv) == 0 or '--gui' in argv) and not '--ignore-gooey' in argv:  # pragma: no cover
         # Initialize the Gooey parser
         main_parser = gooey.GooeyParser(add_help=True, description=desc, epilog=ep, formatter_class=argparse.RawTextHelpFormatter)
         # Define Gooey widget types explicitly (because type auto-detection doesn't work quite well)
@@ -365,13 +365,13 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     main_parser.add_argument('-i', '--input', metavar='/some/path', type=str, required=True,
                         help='Path to the input folder', **widget_dir)
     main_parser.add_argument('-ri', '--regex_input', metavar=r'"sub[^/]+/(\d+)"', type=str, required=True,
-                        help=r'Regex to match input paths. Must be defined relatively from --input folder. Do not forget to enclose it in double quotes (and not single)! To match any directory, use [^/\]*? or the alias \dir.')
+                        help=r'Regex to match input paths. Must be defined relatively from --input folder. Do not forget to enclose it in double quotes (and not single)! To match any directory, use [^/\]*? or the alias \dir.', **widget_text)
 
     # Optional output/copy mode
     main_parser.add_argument('-o', '--output', metavar='/new/path', type=str, required=False, default=None,
                         help='Path to the output folder (where file will get copied over if --copy)', **widget_dir)
     main_parser.add_argument('-ro', '--regex_output', metavar=r'"newsub/\1"', type=str, required=False, default=None,
-                        help='Regex to substitute input paths to convert to output paths. Must be defined relatively from --output folder. If not provided but --output is specified, will keep the same directory layout as input (useful to extract specific files without changing layout). Do not forget to enclose it in double quotes!')
+                        help='Regex to substitute input paths to convert to output paths. Must be defined relatively from --output folder. If not provided but --output is specified, will keep the same directory layout as input (useful to extract specific files without changing layout). Do not forget to enclose it in double quotes!', **widget_text)
     main_parser.add_argument('-c', '--copy', action='store_true', required=False, default=False,
                         help='Copy the matched input paths to the regex-substituted output paths.')
     main_parser.add_argument('-s', '--symlink', action='store_true', required=False, default=False,
@@ -395,7 +395,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     main_parser.add_argument('-ra', '--range', type=str, metavar='1:10-255', required=False, default=False,
                         help='Range mode: match only the files with filenames containing numbers in the specified range. The format is: (regex-match-group-id):(range-start)-(range-end). regex-match-group-id is the id of the regular expression that will contain the numbers that must be compared to the range. range-end is inclusive.')
     main_parser.add_argument('--report', type=str, required=False, default='pathmatcher_report.txt', metavar='pathmatcher_report.txt',
-                        help='Where to store the simulation report (default: pwd = current working dir).')
+                        help='Where to store the simulation report (default: pwd = current working dir).', **widget_filesave)
     main_parser.add_argument('-l', '--log', metavar='/some/folder/filename.log', type=str, required=False,
                         help='Path to the log file. (Output will be piped to both the stdout and the log file)', **widget_filesave)
     main_parser.add_argument('-v', '--verbose', action='store_true', required=False, default=False,

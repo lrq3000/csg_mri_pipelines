@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.1'
+__version__ = '1.2.2'
 
 import argparse
 import os
@@ -47,9 +47,10 @@ import shutil
 import sys
 import traceback
 
+import pathmatcher
+
 from collections import OrderedDict
 from itertools import izip_longest, product
-from pathmatcher import pathmatcher
 
 try:
     from scandir import walk # use the faster scandir module if available (Python >= 3.5), see https://github.com/benhoyt/scandir
