@@ -12,13 +12,13 @@ restoredefaultpath(); matlabpath(strrep(matlabpath, userpath, '')); % clean up t
 addpath(spmpath); % add the path to SPM
 
 % Get list of all folders recursively. We will then grab all the niftis at this level to convert to 4D.
-folderslist = dirPlus('G:\Topreproc\Tutorial\data_niftis - Copie', 'ReturnDirs', true);
+folderslist = dirPlus(rootpath, 'ReturnDirs', true);
 
 if numel(folderslist) > 0
     for f=1:numel(folderslist)
         % Get list of all nifti files (NOT recursively, and only .img or .nii files)
-        rootpath = folderslist{f};
-        niftifiles = dirPlus(rootpath, 'PrependPath', true, 'FileFilter', '.*\.(img|nii)$', 'Depth', 0);
+        filerootpath = folderslist{f};
+        niftifiles = dirPlus(filerootpath, 'PrependPath', true, 'FileFilter', '.*\.(img|nii)$', 'Depth', 0);
 
         if numel(niftifiles) > 0
             % Test which are 3D nifti files
