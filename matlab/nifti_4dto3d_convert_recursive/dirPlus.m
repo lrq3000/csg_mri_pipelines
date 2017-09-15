@@ -113,9 +113,10 @@ function output = dirPlus(rootPath, varargin)
 %   See also dir, regexp.
 
 % Author: Ken Eaton
-% Version: MATLAB R2016b
-% Last modified: 3/21/17
+% Version: MATLAB R2016b - R2011a
+% Last modified: 4/14/17
 % Copyright 2017 by Kenneth P. Eaton
+% Copyright 2017 by Stephen Larroque - backwards compatibility
 %--------------------------------------------------------------------------
 
   % Create input parser (only have to do this once, hence the use of a
@@ -126,41 +127,44 @@ function output = dirPlus(rootPath, varargin)
     recursionLimit = get(0, 'RecursionLimit');
     parser = inputParser();
     parser.FunctionName = 'dirPlus';
-    %parser.PartialMatching = true;
+    if verLessThan('matlab', '8.2')  % MATLAB R2013b = 8.2
+      addPVPair = @addParamValue;
+    else
+      parser.PartialMatching = true;
+      addPVPair = @addParameter;
+    end
 
     % Add general parameters:
 
     addRequired(parser, 'rootPath', ...
                 @(s) validateattributes(s, {'char'}, {'nonempty'}));
-    addParamValue(parser, 'Struct', false, ...
-                 @(b) validateattributes(b, {'logical'}, {'scalar'}));
-    addParamValue(parser, 'Depth', recursionLimit, ...
-                 @(s) validateattributes(s, {'numeric'}, ...
-                                         {'scalar', 'nonnegative', ...
-                                          'nonnan', 'integer', ...
-                                          '<=', recursionLimit}));
-    addParamValue(parser, 'ReturnDirs', false, ...
-                 @(b) validateattributes(b, {'logical'}, {'scalar'}));
-    addParamValue(parser, 'PrependPath', true, ...
-                 @(b) validateattributes(b, {'logical'}, {'scalar'}));
+    addPVPair(parser, 'Struct', false, ...
+              @(b) validateattributes(b, {'logical'}, {'scalar'}));
+    addPVPair(parser, 'Depth', recursionLimit, ...
+              @(s) validateattributes(s, {'numeric'}, ...
+                                      {'scalar', 'nonnegative', ...
+                                       'nonnan', 'integer', ...
+                                       '<=', recursionLimit}));
+    addPVPair(parser, 'ReturnDirs', false, ...
+              @(b) validateattributes(b, {'logical'}, {'scalar'}));
+    addPVPair(parser, 'PrependPath', true, ...
+              @(b) validateattributes(b, {'logical'}, {'scalar'}));
 
     % Add file-specific parameters:
 
-    addParamValue(parser, 'FileFilter', '', ...
-                 @(s) validateattributes(s, {'char'}, {'row'}));
-    addParamValue(parser, 'ValidateFileFcn', [], ...
-                 @(f) validateattributes(f, {'function_handle'}, ...
-                                         {'scalar'}));
+    addPVPair(parser, 'FileFilter', '', ...
+              @(s) validateattributes(s, {'char'}, {'row'}));
+    addPVPair(parser, 'ValidateFileFcn', [], ...
+              @(f) validateattributes(f, {'function_handle'}, {'scalar'}));
 
     % Add directory-specific parameters:
 
-    addParamValue(parser, 'DirFilter', '', ...
-                 @(s) validateattributes(s, {'char'}, {'row'}));
-    addParamValue(parser, 'ValidateDirFcn', [], ...
-                 @(f) validateattributes(f, {'function_handle'}, ...
-                                         {'scalar'}));
-    addParamValue(parser, 'RecurseInvalid', false, ...
-                 @(b) validateattributes(b, {'logical'}, {'scalar'}));
+    addPVPair(parser, 'DirFilter', '', ...
+              @(s) validateattributes(s, {'char'}, {'row'}));
+    addPVPair(parser, 'ValidateDirFcn', [], ...
+              @(f) validateattributes(f, {'function_handle'}, {'scalar'}));
+    addPVPair(parser, 'RecurseInvalid', false, ...
+              @(b) validateattributes(b, {'logical'}, {'scalar'}));
 
   end
 
@@ -180,6 +184,18 @@ end
 %--------------------------------------------------------------------------
 % Core recursive function to find files and directories.
 function output = dirPlus_core(rootPath, optionStruct, depth, isValid)
+
+  % Backwards compatibility for fullfile:
+
+  persistent fullfilecell
+  if isempty(fullfilecell)
+    if verLessThan('matlab', '8.0')  % MATLAB R2012b = 8.0
+      fullfilecell = @(P, C) cellfun(@(S) fullfile(P, S), C, ...
+                                     'UniformOutput', false);
+    else
+      fullfilecell = @fullfile;
+    end
+  end
 
   % Get current directory contents:
 
@@ -235,7 +251,7 @@ function output = dirPlus_core(rootPath, optionStruct, depth, isValid)
     if optionStruct.Struct
       output = {dirData(validIndex)};
     elseif any(validIndex) && optionStruct.PrependPath
-      output = fullfile(rootPath, subDirs(validIndex));
+      output = fullfilecell(rootPath, subDirs(validIndex));
     else
       output = subDirs(validIndex);
     end
@@ -274,7 +290,7 @@ function output = dirPlus_core(rootPath, optionStruct, depth, isValid)
         if optionStruct.Struct
           output = {fileData};
         elseif ~isempty(output) && optionStruct.PrependPath
-          output = cellfun(@(S) fullfile(rootPath, S), output, 'Uniform', 0);
+          output = fullfilecell(rootPath, output);
         end
 
       end
@@ -302,7 +318,7 @@ function output = dirPlus_core(rootPath, optionStruct, depth, isValid)
 
     nSubDirs = numel(subDirs);
     if (nSubDirs > 0)
-      subDirs = cellfun(@(S) fullfile(rootPath, S), subDirs, 'Uniform', 0);
+      subDirs = fullfilecell(rootPath, subDirs);
       output = {output; cell(nSubDirs, 1)};
       for iSub = 1:nSubDirs
         output{iSub+1} = dirPlus_core(subDirs{iSub}, optionStruct, ...
