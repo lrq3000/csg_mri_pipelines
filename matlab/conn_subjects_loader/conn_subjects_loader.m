@@ -17,7 +17,7 @@ function conn_subjects_loader()
 %
 % by Stephen Larroque
 % Created on 2016-04-11
-% Tested on conn15h and conn16a, preliminary support for conn17a
+% Tested on conn15h, conn16b, and conn17f
 % v0.10.7
 %
 % Licensed under MIT LICENSE
@@ -38,7 +38,7 @@ function conn_subjects_loader()
 % ------ PARAMETERS HERE
 TR = 2.0;  % can also input a vector if your subjects have different TR, eg: [ 2.0 2.15*ones(1, 14) 2.15*ones(1, 13) ]
 conn_file = fullfile(pwd, 'conn_project.mat');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
-conn_ver = 16; % Put here the CONN version you use (just the number, not the letter)
+conn_ver = 17; % Put here the CONN version you use (just the number, not the letter)
 root_path = 'G:\Topreproc\some-study\';
 path_to_spm = 'C:\matlab_tools\spm12';
 path_to_conn = 'C:\matlab_tools\conn16b'; % avoid CONN16a, gives weird results (and sanity checks for DMN do not pass)
