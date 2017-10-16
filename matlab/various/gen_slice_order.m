@@ -1,13 +1,21 @@
-function res=gen_slice_order(nslices, hstep, vstep, slice_order, unroll, multi, tr, slice_ids)
-% res=gen_slice_order(nslices, hstep, vstep, slice_order, unroll, tr, multi)
+function res=gen_slice_order(nslices, hstep, vstep, slice_order, reverse, unroll, multi, tr, slice_ids)
+% res=gen_slice_order(nslices, hstep, vstep, slice_order, reversed, unroll, tr, multi)
 % Compute a 2D slice order scheme based on given parameters
 % slice_order can either be 'asc' or 'desc'.
+% reverse=1 will reverse the row order (eg, instead of ascending 1, 3, ... 2, 4, ... we will get 2, 4, ... 1, 3, ...). You can also specify a vector with the original index of rows, eg: [2 1] to reverse, or more if you have more lines. This is useful for specific machines such as 3T MAGNETOM Prisma fit System which uses slice order ascending interleaved reversed when acquiring an even number of slices, and ascending interleaved (non-reversed) when acquiring an odd number.
+% unroll=1 will unroll the whole matrix into one vector as expected by SPM.
 % multi > 0 enables multiband EPI. multi can be either 1 for rows or 2 for columns. This will return time points in seconds instead of slice number without multiband.
 % tr (in seconds) > 0 will return slice time offsets (in ms, as expected by spm) instead of slice number.
 % slice_ids is optional, you can provide your own custom slice indices with this argument, very useful for multiband with non linear schemes (if this exists?).
 % by Stephen Larroque from the Coma Science Group, 2017
 % Licensed under MIT.
 %
+% v1.1
+%
+
+if ~exist('reverse', 'var')
+    reverse = 0;
+end
 
 if ~exist('unroll', 'var')
     unroll = false;
@@ -43,6 +51,15 @@ if ~exist('slice_ids', 'var')
     end %endif
 end %endif
 res = slice_ids;
+
+% Reverse slice order acquisition
+if reverse ~= 0
+    if isscalar(reverse) & reverse == 1
+        res = res(size(res, 1):-1:1, :);
+    elseif ~isscalar(reverse)
+        res = res(reverse, :);
+    end %endif
+end %endif
 
 % Multiband EPI: slices are acquired in parallel, either along rows or columns axis
 if multi > 0
