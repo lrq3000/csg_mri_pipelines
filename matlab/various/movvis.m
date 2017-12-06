@@ -2,7 +2,7 @@ function movvis(root_path)
 % movvis(root_path)
 % Movement visualization of all subjects after preprocessing with ART
 % Folders tree structure must correspond to conn subjects loader expected structure (Condition/Subject/data/Session/restMotionCorrected/rp_*.txt)
-% v1.1
+% v1.2
 % by Stephen Larroque 2016-2017
 % License MIT
 
@@ -45,17 +45,26 @@ else
             % For each session
             sessions = get_dirnames(datapath);
             for isess=1:length(sessions)
-                spath = fullfile(datapath, sessions{isess}, 'rest', 'restMotionCorrected');
-                % Extract realign motion txt file (from SPM)
-                sfile = regex_files(spath, '^rp_.+\.txt$');
+                sesspath = fullfile(datapath, sessions{isess});
+                modalities = get_dirnames(sesspath);
+                % check all modalities folders (eg, rest, tennis, etc.)
+                for im=1:length(modalities)
+                    % skip mprage and jobs folders
+                    if ~strcmpi(modalities{im}, 'mprage') & ~strcmpi(modalities{im}, 'jobs')
+                        spath = fullfile(sesspath, modalities{im});
+                        % Extract realign motion txt file (from SPM)
+                        sfile = regex_files(spath, '^rp_.+\.txt$');
 
-                % Add this file only if found (eg, do not add mprage folders)
-                if ~isempty(sfile)
-                    sid = sid + 1;
-                    list_files{sid} = struct('condition', conditions{c}, ...
-                                            'name', sname, ...
-                                            'session', sessions{isess}, ...
-                                            'file', sfile);
+                        % Add this file only if found (eg, do not add mprage folders)
+                        if ~isempty(sfile)
+                            sid = sid + 1;
+                            list_files{sid} = struct('condition', conditions{c}, ...
+                                                    'name', sname, ...
+                                                    'session', sessions{isess}, ...
+                                                    'modality', modalities{im}, ...
+                                                    'file', sfile);
+                    end %endif
+                end %endfor
                 end
             end
         end
@@ -82,7 +91,7 @@ for sid=1:length(list_files)
     plot(mov_data(:,1:3)); % x, y, z translation in mm
     xlabel('Volume number');
     ylabel('mm');
-    title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session]);
+    title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session ' mod ' list_files{sid}.modality]);
 
     % Plot rotation (tx, ty, tz in radians)
     figure(2);
@@ -90,14 +99,16 @@ for sid=1:length(list_files)
     plot(mov_data(:,4:6)); % tx, ty, tz rotation in radians
     xlabel('Volume number');
     ylabel('rad');
-    title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session]);
+    title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session ' mod ' list_files{sid}.modality]);
 end
 
 % Set one legend for all the subplots, and place it outside the last subplot (because the subplots will probably be small, with the legend over it would be impossible to see anything)
 figure(1);
-legend('x', 'y', 'z', 'location','northeastoutside');
+legend('x', 'y', 'z', 'location','northeast');
+legend('boxoff');
 figure(2);
-legend('tx', 'ty', 'tz', 'location','northeastoutside');
+legend('tx', 'ty', 'tz', 'location','northeast');
+legend('boxoff');
 
 % Bring to the front
 figure(1); shg;
