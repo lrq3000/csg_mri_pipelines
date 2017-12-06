@@ -39,7 +39,7 @@ function conn_subjects_loader()
 TR = 2.0;  % can also input a vector if your subjects have different TR, eg: [ 2.0 2.15*ones(1, 14) 2.15*ones(1, 13) ]
 conn_file = fullfile(pwd, 'conn_project.mat');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
 conn_ver = 17; % Put here the CONN version you use (just the number, not the letter)
-root_path = 'G:\Topreproc\some-study\';
+root_path = 'G:\Topreproc\some-study';
 path_to_spm = 'C:\matlab_tools\spm12';
 path_to_conn = 'C:\matlab_tools\conn17f'; % avoid CONN16a and prefer CONN16b or even CONN17f, as CONN16a gives weird results (and sanity checks for DMN do not pass)
 path_to_roi_maps = 'C:\GigaData\ESA\Athena_rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
