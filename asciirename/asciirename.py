@@ -51,7 +51,7 @@ import warnings
 
 try:
     # to convert unicode accentuated strings to ascii
-    from .unidecode import unidecode
+    from unidecode import unidecode
 except ImportError:
     # native alternative but may remove quotes and some characters (and be slower?)
     import unicodedata
@@ -262,4 +262,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
 
 # Calling main function if the script is directly called (not imported as a library in another program)
 if __name__ == "__main__":  # pragma: no cover
+    if __package__ is None:
+        import os
+        os.sys.path.append(os.path.abspath('.'))  # to import local version of unidecode, which was adapted a bit
     sys.exit(main())
