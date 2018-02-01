@@ -1,5 +1,5 @@
-function [T_thr, P_thr] = threshold_fdr(mcc, thr, df, imfilepath, STAT, conjonc_nb, mask, twotailed, SPM, correlmap)
-% threshold_fdr(mcc, thr, df, imfilepath, STAT, conjonc_nb, mask, twotailed)
+function [T_thr, P_thr] = threshold_fdr(imfilepath, mcc, thr, df, STAT, conjonc_nb, mask, twotailed, SPM, correlmap)
+% threshold_fdr(imfilepath, mcc, thr, df, STAT, conjonc_nb, mask, twotailed)
 % (For SPM12) This script allows the thresholding of any nifti file, no need for a SPM.mat structure. It supports FDR but also FWE and p-uncorrected, and also Nichols min-T conjunction (conjunction null hypothesis).
 % If no argument is given, a SPM (minimal) GUI will open to ask for the required parameters.
 %
@@ -19,7 +19,7 @@ function [T_thr, P_thr] = threshold_fdr(mcc, thr, df, imfilepath, STAT, conjonc_
 % By Stephen Larroque, Coma Science Group, GIGA-Consciousness, University and Hospital of Liege
 % Created on 2017-11-29
 %
-% v0.1.0
+% v0.1.1
 %
 % TODO:
 % * Different results from conn_fdr and conn_clusters, the threshold here is lower (CONN is more conservative than SPM for the same thresholds)
