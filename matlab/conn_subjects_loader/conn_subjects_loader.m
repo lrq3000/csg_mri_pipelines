@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h, conn16b, and conn17f
-% v0.10.8
+% v0.10.9
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016-2017 Stephen Larroque
@@ -170,7 +170,7 @@ for g=1:length(groups)
             session.files.roi.csf = check_exist(regex_files(structpath, ['^' struct_segmented_csf_prefix '.+\.(img|nii)$']));
             % Covariates 1st-level
             % ART movement artifacts correction
-            session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_(' func_smoothed_prefix '.+)?\.mat$']));
+            session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_*(' func_smoothed_prefix '.+)?\.mat$']));
             % Remove first x functional volumes (to avoid fMRI coil gradient calibration bias)
             if nb_first_volumes_to_remove > 0
                 session.files.func = session.files.func(nb_first_volumes_to_remove+1:end);
