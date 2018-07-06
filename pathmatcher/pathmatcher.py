@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 import argparse
 import os
@@ -49,6 +49,7 @@ import shlex
 import shutil
 import sys
 import traceback
+import urllib
 
 from pathlib2 import PurePath, PureWindowsPath, PurePosixPath # opposite operation of os.path.join (split a path
 from tee import Tee
@@ -92,11 +93,21 @@ class More(object):
 def open_with_default_app(filepath):
     """Open the report with the default text editor"""
     if sys.platform == "linux" or sys.platform == "linux2":
-        os.system('%s %s' % (os.getenv('EDITOR'), filepath))
+        defaulteditor = os.getenv('EDITOR')
+        if defaulteditor:
+            # default editor is set in bash, use it
+            os.system('%s %s' % (defaulteditor, filepath))
+        else:
+            # else no default editor is set in bash, use xdg-open
+            os.system("xdg-open "+filepath)
     elif sys.platform == "win32":
         os.system("start "+filepath)
     elif sys.platform == "darwin":
         os.system("open "+filepath)
+    else:
+        # Failsafe case: use the webbrowser module to open the file
+        import webbrowser
+        webbrowser.open(filepath)
 
 def str_to_raw(str):
     """Convert string received from commandline to raw (unescaping the string)"""
@@ -408,10 +419,8 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     args = main_parser.parse_args(argv) # Storing all arguments to args
     
     #-- Set variables from arguments
-    inputpath = fullpath(args.input)
-    rootfolderpath = inputpath
-    outputpath = fullpath(args.output) if args.output else None
-    rootoutpath = outputpath
+    inputpath = args.input
+    outputpath = args.output if args.output else None
     regex_input = args.regex_input
     regex_output = args.regex_output
     copy_mode = args.copy
@@ -430,6 +439,30 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     silent = args.silent
 
     # -- Sanity checks
+
+    # First check if there is any input path, it's always needed
+    if inputpath is None:
+        raise NameError('No input path specified! Please specify one!')
+
+    # Remove trailing spaces
+    inputpath = inputpath.strip()
+    if outputpath:
+        outputpath = outputpath.strip()
+
+    # Input or output path is a URL (eg: file:///media/... on Ubuntu/Debian), then strip that out
+    RE_urlprotocol = re.compile(r'^\w{2,}:[/\\]{2,}', re.I)
+    if RE_urlprotocol.match(inputpath):
+        inputpath = urllib.unquote(inputpath).decode("utf8")  # first decode url encoded characters such as spaces %20
+        inputpath = r'/' + RE_urlprotocol.sub(r'', inputpath)  # need to prepend the first '/' since it is probably an absolute path and here we will strip the whole protocol
+    if outputpath and RE_urlprotocol.match(outputpath):
+        outputpath = urllib.unquote(outputpath).decode("utf8")
+        outputpath = r'/' + RE_urlprotocol.sub(r'', outputpath)
+
+    # Check if input/output paths exist, else might be a relative path, then convert to an absolute path
+    rootfolderpath = inputpath if os.path.exists(inputpath) else fullpath(inputpath)
+    rootoutpath = outputpath if outputpath is None or os.path.exists(outputpath) else fullpath(outputpath)
+
+    # Single file specified instead of a folder: we define the input folder as the top parent of this file
     if os.path.isfile(inputpath): # if inputpath is a single file (instead of a folder), then define the rootfolderpath as the parent directory (for correct relative path generation, else it will also truncate the filename!)
         rootfolderpath = os.path.dirname(inputpath)
     if outputpath and os.path.isfile(outputpath): # if inputpath is a single file (instead of a folder), then define the rootfolderpath as the parent directory (for correct relative path generation, else it will also truncate the filename!)
@@ -441,12 +474,15 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     if rootoutpath:
         rootoutpath = rootoutpath.rstrip('/\\')
 
+    # Final check of whether thepath exist
     if not os.path.isdir(rootfolderpath):
-        raise NameError('Specified input path does not exist. Please check the specified path')
+        raise NameError('Specified input path: %s (detected as %s) does not exist. Please check the specified path.' % (inputpath, rootfolderpath))
 
+    # Check the modes are not conflicting
     if sum([1 if elt == True else 0 for elt in [copy_mode, symlink_mode, move_mode, movefast_mode, delete_mode]]) > 1:
         raise ValueError('Cannot set multiple modes simultaneously, please choose only one!')
 
+    # Check if an output is needed and is not set
     if (copy_mode or symlink_mode or move_mode or movefast_mode) and not outputpath:
         raise ValueError('--copy or --symlink or --move or --move_fast specified but no --output !')
 
