@@ -1,7 +1,7 @@
 #!/bin/bash
 # Single subject Multi-Shell DTI analysis WITHOUT ACT but with movement correction for the Coma Science Group, by Stephen Larroque (2018).
 # Required libraries: dcmtk dcmdjpeg (just to uncompress), mrtrix v3, trackvis, FSL, ANTS, Python 2.
-# v2.0.0
+# v2.0.1
 # Tested on 19-07-2018 to latest MRTRIX3 github commit (post 3.0 RC3): d6656921594f22517d489a7f9f2d2598bcf18ce6
 # Also requires eddy v5.0.11 (for movement/slice timing correction and multishell acquired in separate sequences)
 # IMPORTANT: you need to specify a slspec.txt file with the slice order. If you don't have it or do not wish to correct for this type of motion, remove the 5 last parameters from eddy/dwipreproc command: --mporder=6 --slspec=my_slspec.txt --s2v_niter=5 --s2v_lambda=1 --s2v_interp=trilinear
@@ -30,7 +30,7 @@ if [ $# -lt 1 ]; then
     echo "Usage: ./$SCRIPTNAME /path/to/root/of/dicom/dir/"
     echo "Note: input should be dicom folder with subdirectories being modalities, do not input niftis! (because mrtrix is more precise to extract gradients and dti image)."
     echo "Please first extract the DWI with this command: mrconvert . dwi.mif"
-    echo "If the DTI was acquired in multiple separate sequences, please use mrconvert . dwixxx.mif for each bvalue separately, and then use mrcat dwixxx.mif dwiyyy.mif ... dwi.mif to concatenate everything in a single multishell file (MRTRIX3 will automatically detect the bval 0 scans, even in the middle, so no need for dwiextract)."
+    echo "If the DTI was acquired in multiple separate sequences, please use mrcat . . . dwi.mif with as many dots as there are shells, and select each shell one after the other, they will all be converted and concatenated in one go in a single mif file (MRTRIX3 will automatically detect the bval 0 scans, even in the middle, so no need for dwiextract)."
     echo "Please also provide a slspec.txt file describing the slice order of acquisition, see this file's header in the sourcecode for more info."
     exit
 fi
