@@ -1,13 +1,15 @@
-# neuro_experiments_tools
-Various tools I made to help automate some usual tasks.
+# Coma Science Group MRI pipelines
+MRI preprocessing and analysis pipelines and tools for the study of disorders of consciousness.
 
-Each tool is placed in its own folder. Most tools will be in Python, but you can expect to see some tools in Matlab or other languages as they fit my needs.
+This includes pipelines for fMRI BOLD EPI (using SPM and CONN) and for DWI (using MRTRIX3 and FSL).
 
-All tools are licensed under MIT (but not necessarily the required/optional libraries, please check their licences).
+All tools are either in MATLAB or Python.
 
-The rest of this document will describe each tool's purpose, usage and linked libraries.
+All tools are licensed under MIT (but not necessarily the required/optional libraries, please check their own licenses).
 
-## Regular Expression Path Matcher
+The rest of this document will describe some of the tool's purpose, usage and linked libraries. More documentation will be written in the future (maybe). In any case, literate programming is extensively used, so that you can expect lots of comments inside the scripts itself, so that they should be useable without any external documentation.
+
+## pathmatcher: Regular Expression Path Matcher
 
 ### Description
 
@@ -325,4 +327,4 @@ Simply modify the variables at the top of the script, and launch it in MATLAB.
 #### Required
 
 * SPM (tested with v12)
-* CONN (tested with v15h and v16a)
+* CONN (tested with several versions from v15h up to v18a - please refer to the scripts headers for the latest updates)
