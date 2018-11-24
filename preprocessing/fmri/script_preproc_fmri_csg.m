@@ -26,7 +26,7 @@ function script_preproc_fmri_csg()
 % 2016-2018
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2018
-% v2.0.0b
+% v2.1.0b
 % License: MIT
 %
 % TODO:
@@ -45,7 +45,7 @@ clear classes;
 % Motion correction uses scan-to-scan motion to determine outliers using composite measures (ART toolbox by Susan Gabrieli-Whitfield)
 nslices = 0; % set to 0 for autodetect
 TR = 0; % set to 0 for autodetect
-script_mode = 1; % 0: use VBM8 + SPM8 (slow); 1: use SPM12 with OldSeg only (fast); 2: use SPM12 + CAT12 (slowest).
+script_mode = 1; % 0: use VBM8 + SPM8 (slow); 1: use SPM12 with OldSeg only (fast); 2: use SPM12 + CAT12 (slowest); 3: use SPM12 with Unified Segmentation (fast).
 motionRemovalTool = 'art';
 root_pth = 'X:\Path\To\Data'; % root path, where all the subjects data is
 path_to_spm = 'C:\matlab_tools\spm12'; % change here if you use SPM8 + VBM8 pipeline
@@ -101,6 +101,9 @@ elseif script_mode == 2 % for SPM12+CAT12
     path_to_tissue_proba_map = 'tpm/TPM.nii';
     path_to_dartel_template = 'toolbox/cat12/templates_1.50mm/Template_1_IXI555_MNI152.nii';
     path_to_shooting_template = 'toolbox/cat12/templates_1.50mm/Template_0_IXI555_MNI152_GS.nii';
+elseif script_mode == 3 % for SPM12 UniSeg
+    path_to_batch = 'batch_preproc_spm12_uniseg.mat';
+    path_to_tissue_proba_map = 'tpm/TPM.nii';
 end
 
 slice_order_auto = {};
@@ -215,7 +218,7 @@ for c = 1:length(conditions)
                 end
                 if script_mode == 0
                     matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.cfg_named_file.files{isess} = cellstr(fdata);
-                elseif (script_mode == 1) || (script_mode == 2)
+                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 3)
                     matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.file_dir.file_ops.cfg_named_file.files{isess} = cellstr(fdata);
                 end
 
@@ -226,7 +229,7 @@ for c = 1:length(conditions)
                 matlabbatchall{matlabbatchall_counter}{4}.spm.spatial.realign.estwrite.data{isess}(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', isess), substruct('.','val', '{}',{3}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{isess}, '.','files'));
 
                 % idem for functional images coregistration to structural
-                if script_mode == 1
+                if (script_mode == 1) || (script_mode == 3)
                     coregbaseidx = 5;
                 elseif (script_mode == 0) || (script_mode == 2)
                     coregbaseidx = 6;
@@ -325,7 +328,7 @@ for c = 1:length(conditions)
                 end
                 if script_mode == 0
                     matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.cfg_named_file.files = transpose({cellstr(sdata)});
-                elseif (script_mode == 1) || (script_mode == 2)
+                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 3)
                     matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(sdata)}';
                 end
                 % Load functional image
@@ -338,7 +341,7 @@ for c = 1:length(conditions)
                 end
                 if script_mode == 0
                     matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.cfg_named_file.files = {cellstr(fdata)};
-                elseif (script_mode == 1) || (script_mode == 2)
+                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 3)
                     matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(fdata)};
                 end
 
@@ -397,8 +400,7 @@ for c = 1:length(conditions)
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.darteltpm = {strcat(fullfile(path_to_spm, path_to_dartel_template), ',1')};
                     % Dartel shooting template
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shootingtpm = {strcat(fullfile(path_to_spm, path_to_shooting_template), ',1')};
-                end
-                if script_mode == 1
+                elseif script_mode == 1
                     % SPM12 Old segmentation templates config
                     template_seg_list = {'grey.nii', 'white.nii', 'csf.nii'};
                     template_seg_cell = {};
@@ -408,9 +410,18 @@ for c = 1:length(conditions)
                     end
                     matlabbatchall{matlabbatchall_counter}{6}.spm.tools.oldseg.opts.tpm = template_seg_cell;
                     % Smoothing parameters
-                    % Note: for SPM pipelines, the smoothing is done directly inside the batch. For CAT12/VBM8 however it's not possible, so the smoothing is done separately in another dynamically constructed batch (see below)
+                    % Note: for SPM pipelines (ie, without VBM8 nor CAT12), the smoothing is done directly inside the batch. For CAT12/VBM8 however it's not possible, so the smoothing is done separately in another dynamically constructed batch (see below)
                     matlabbatchall{matlabbatchall_counter}{9}.spm.spatial.smooth.fwhm = [smoothingkernel smoothingkernel smoothingkernel];
                     matlabbatchall{matlabbatchall_counter}{9}.spm.spatial.smooth.prefix = ['s' int2str(smoothingkernel)];
+                elseif script_mode == 3
+                    % SPM12 Unified segmentation templates config
+                    for i = 1:6
+                        matlabbatchall{matlabbatchall_counter}{6}.spm.spatial.preproc.tissue(i).tpm = {[fullfile(path_to_spm, path_to_tissue_proba_map) sprintf(',%i', i)]};
+                    end
+                    % Smoothing parameters
+                    % Note: for SPM pipelines (ie, without VBM8 nor CAT12), the smoothing is done directly inside the batch. For CAT12/VBM8 however it's not possible, so the smoothing is done separately in another dynamically constructed batch (see below)
+                    matlabbatchall{matlabbatchall_counter}{8}.spm.spatial.smooth.fwhm = [smoothingkernel smoothingkernel smoothingkernel];
+                    matlabbatchall{matlabbatchall_counter}{8}.spm.spatial.smooth.prefix = ['s' int2str(smoothingkernel)];
                 end
             end %end if sharedmri
 
@@ -489,7 +500,7 @@ for c = 1:length(conditions)
                 smoothingbatchall{matlabbatchall_counter}{1}.spm.spatial.smooth.prefix = ['s' int2str(smoothingkernel)];
                 % Saving temporary batch (allow to introspect later on in case of issues)
                 save_batch(fullfile(root_pth, 'JOBS'), smoothingbatchall{matlabbatchall_counter}, 'smoothing', script_mode, data(isub).name);
-            elseif (script_mode == 1) && (resizeto3)
+            elseif ((script_mode == 1) || (script_mode == 3)) && resizeto3
                 % with SPM12 batch, if we did a resizeto3 then we need to
                 % smooth separately
                 fprintf(1, 'Smoothing functional to %i...\n', smoothingkernel);
@@ -537,7 +548,7 @@ for c = 1:length(conditions)
                     else
                         dataMotion = spm_select('FPList', datapath, ['^' smoothprefix 'wa'  '.*\.(img|nii)$']);
                     end
-                elseif script_mode == 1
+                elseif (script_mode == 1) || (script_mode == 3)
                     if keep_normalized_timeseries == 0
                         if resizeto3
                             delete(fullfile(datapath, 'rwra*.*'));
@@ -697,12 +708,12 @@ function [fdata] = get_fdata(data, isub, isess)
     end
 end
 
-function [rfdata] = get_rfdata(data, isub, isess, mode)
+function [rfdata] = get_rfdata(data, isub, isess, script_mode)
     %subjname = data(isub).funct;
     dirpath = fullfile(data(isub).sessions{isess}.dir,'rest');
-    if (mode == 0) || (mode == 2)
+    if (script_mode == 0) || (script_mode == 2)
         prefix = 'wa';
-    elseif mode == 1
+    elseif (script_mode == 1) || (script_mode == 3)
         prefix = 'wra';
     end
     [rfdata]=spm_select('FPList',dirpath,strcat('^',prefix,'.+\.(img|nii)$'));
@@ -712,16 +723,16 @@ function [rfdata] = get_rfdata(data, isub, isess, mode)
     end
 end
 
-function [sfdata] = get_sfdata(data, isub, isess, mode, resizeto3)
+function [sfdata] = get_sfdata(data, isub, isess, script_mode, resizeto3)
     %subjname = data(isub).funct;
     dirpath = fullfile(data(isub).sessions{isess}.dir,'rest');
-    if (mode == 0) || (mode == 2)
+    if (script_mode == 0) || (script_mode == 2)
         if resizeto3
             prefix = 'rwa';
         else
             prefix = 'wa';
         end
-    elseif mode == 1
+    elseif (script_mode == 1) || (script_mode == 3)
         if resizeto3
             prefix = 'rwra';
         else
