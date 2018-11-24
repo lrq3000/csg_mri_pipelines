@@ -1,0 +1,19 @@
+How to configure Neurodebian 8 for DTI analysis (in a Virtual Machine such as VirtualBox)
+Written on 2018-11-12 by Stephen Karl Larroque
+
+Enable Virtualization Technology in your BIOS (and optionally VT-x)
+Launch the virtual machine (or create it after downloading the appliance on Neurodebian website)
+sudo apt-get remove python-cryptography
+sudo apt-get remove python
+install anaconda2 (Python 2) - do NOT use the standard python bundled with Debian!
+python fsl.py
+then add variables of FSL in .bashrc
+sudo apt-get install ants
+sudo find / -name "N4BiasFieldCorrection"
+export PATH="/usr/lib/ants:$PATH"
+pip install nipype
+pip install dipy
+install MRTRIX3 as per the documentation (from the github) (make sure your VM is configured with at least 4096 GB, it's necessary to complete the ./build command of MRTRIX3, else it will run indefinitely).
+Then you can run the scripts!
+In Trackvis, open Allbrain.trk and use Threshold 95% and uncheck y slice filter. Then put Trackvis in fullscreen, zoom in as much as possible while stil seeing the full brain (use ALT + left click to move the brain around) and then save pictures on different angles (front, left, right, top, back). Use CTRL + Left click to rotate, and CTRL+R to reset the view (but might not be correctly oriented).
+Optional: sudo apt-get install gimp, to adjust generated images

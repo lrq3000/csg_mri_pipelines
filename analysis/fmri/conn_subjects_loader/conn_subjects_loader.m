@@ -10,18 +10,18 @@ function conn_subjects_loader()
 % /root_pth/group_id/subject_id/data/session_id/(mprage|rest)/*.(img|hdr) -- Note: mprage for structural MRI, rest for fMRI
 % Any experiment following this tree structure will be accepted and converted to a CONN project automagically for you.
 %
-% Note that BATCH.Setup.preprocessing is not used here as the data is expected to be already preprocessed by your own means (SPM, Dartel/VBM/CAT, custom pipeline, etc.)
+% Note that BATCH.Setup.preprocessing is not used here as the data is expected to be already preprocessed by your own means (SPM, Dartel/VBM/CAT, custom pipeline, etc.), but using raw data you can preprocess from the GUI.
 % If you need to modify this script, take a look at the conn_batch_workshop_nyudataset.m script provided with CONN, it's a very good example that inspired this script.
 %
 % This script supports 3rd level analysis (multi-subjects and multi-sessions).
 %
 % by Stephen Larroque
 % Created on 2016-04-11
-% Tested on conn15h, conn16b, and conn17f
-% v0.10.9
+% Tested on conn15h, conn16b, conn17f and conn18a on data preprocessed with VBM8, CAT12, SPM12 OldSeg and with raw data not preprocessed (in this case, set loading_mode to 0)
+% v1.0.2
 %
 % Licensed under MIT LICENSE
-% Copyleft 2016-2017 Stephen Larroque
+% Copyleft 2016-2019 Stephen Karl Larroque
 % Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 % The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 % THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
@@ -31,24 +31,33 @@ function conn_subjects_loader()
 % * Add CSV reading to automatically input 2nd-level covariates like age or sex.
 % * save an example CONN_x into .mat to show the expected structure (useful if need to debug).
 % * support BIDS format
-% * really support CONN v17 (the project can be built but then the processing of voxel-to-voxel fails!)
 % * Implement modification/updating of previous CONN projects by using conn_batch (eg, conn_batch('Setup.functionals',myfiles);) instead of first creating a struct (which always overwrites the whole project). See http://www.nitrc.org/forum/forum.php?thread_id=7382&forum_id=1144
+%
+% TIPS:
+% * After the CONN project loads, make sure to:
+%   * Check the data ("Display single-slice for all subjects (montage)" and other manual checks).
+%   * Generate ROI masks for Grey Matter, White Matter and CSF (click on ROIs, then select Grey Matter, then click on Erosion Settings, then click OK to everything, then select White matter and do the same... - Note that you cannot select Grey Matter and White Matter and CSF at the same time, because the erosion settings are different: if you do select them all at once, the erosion settings won't be correct).
+%   * Rename the conditions so that it is easier for you later to make contrasts without doing a mistake of interpretation.
+%   * Check the options you want (eg, generating additional files for later post-processing or sanity checks).
+%   * Launch the preprocessing and/or analysis (menu: Tools > Run > Setup/Denoising/1st-level analyses), with the possibility with CONN 18a to run on "Distributed computing" (parallel processing) on all platforms.
+% * At the end of analysis, you can add the 2nd-level covariates (you don't need to do it before the analysis).
 %
 
 % ------ PARAMETERS HERE
-TR = 2.0;  % can also input a vector if your subjects have different TR, eg: [ 2.0 2.15*ones(1, 14) 2.15*ones(1, 13) ]
-conn_file = fullfile(pwd, 'conn_project.mat');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
-conn_ver = 17; % Put here the CONN version you use (just the number, not the letter)
-root_path = 'G:\Topreproc\some-study';
+TR = 2.46;  % can also input a vector if your subjects have different TR, eg: [ 2.0 2.15*ones(1, 14) 2.15*ones(1, 13) ]
+conn_file = fullfile(pwd, 'conn_project_ket_new17.mat');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
+conn_ver = 18; % Put here the CONN version you use (just the number, not the letter)
+root_path = 'X:\Path\To\Data';
 path_to_spm = 'C:\matlab_tools\spm12';
-path_to_conn = 'C:\matlab_tools\conn17f'; % avoid CONN16a and prefer CONN16b or even CONN17f, as CONN16a gives weird results (and sanity checks for DMN do not pass)
-path_to_roi_maps = 'C:\GigaData\ESA\Athena_rois'; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
-func_smoothed_prefix = 's8rwa'; % prefix of the functional images you want to use (generally the smoothed motion corrected functional images). Use swra for SPM12.
+path_to_conn = 'C:\matlab_tools\conn18a'; % avoid CONN16a and prefer CONN16b or even CONN17f, as CONN16a gives weird results (and sanity checks for DMN do not pass)
+path_to_roi_maps = ''; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
+loading_mode = 0; % loading mode: raw files (0) or already preprocessed (1)? If 0 (raw files), the prefixes below won't be used
+func_smoothed_prefix = 's8wra'; % prefix of the functional images you want to use (generally the smoothed motion corrected functional images). Use: s8rwa for VBM8, s8wra for SPM12 OldSeg, s8wra for CAT12.
 roiextract_type = 1; % extract ROI from what kind of functional images? 1: smoothed images (same files as for the rest of the analysis) ; 2: raw images by stripping the SPM smoothing prefix 's' ; 3: raw images by stripping the smoothing prefix specified above ; 4: other files (NOT SUPPORTED in this script yet). Why use 2 or 3? From CONN's manual, it is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
-struct_norm_prefix = 'wmr'; % prefix for the (MNI) normalized structural image. Use wm for SPM12.
-struct_segmented_grey_prefix = 'm0wrp1'; % prefix for segmented structural grey matter. Use wc1 for SPM12.
-struct_segmented_white_prefix = 'm0wrp2'; % idem for white matter. Use wc2 for SPM12.
-struct_segmented_csf_prefix = 'm0wrp3'; % idem for csf. Use wc3 for SPM12.
+struct_norm_prefix = 'wm'; % prefix for the (MNI) normalized structural image. Use: wmr for VBM8, wm for SPM12 OldSeg, wp0 for CAT12.
+struct_segmented_grey_prefix = 'wc1'; % prefix for segmented structural grey matter. Use: m0wrp1 for VBM8, wc1 for SPM12 OldSeg, mwp1 for CAT12.
+struct_segmented_white_prefix = 'wc2'; % idem for white matter. Use wc2 for SPM12 OldSeg.
+struct_segmented_csf_prefix = 'wc3'; % idem for csf. Use wc3 for SPM12 OldSeg.
 nb_first_volumes_to_remove = 0; % NOT READY, DO NOT USE! % number of functional volumes to remove, to reduce the fMRI coil calibration bias at the start of the acquisition (ie, the fMRI scanner needs an exponentially decreasing time to calibrate at the beginning, generally 3-4 volumes). Set 0 to disable. NOTE: works only with multi-files nifti *.img/*.hdr (NOT with 4D nifti yet!).
 automate = 0; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
 resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted. Note that resume can also be used to add new subjects without reprocessing old ones.
@@ -156,21 +165,33 @@ for g=1:length(groups)
                 end
             end
             funcpath = getimgpath(sesspath, 'func'); % do not use the func_motion_corrected subdirectory to find smoothed func images, because we need both the smoothed motion corrected images AND the original images for CONN to work best
-            funcmotpath = getimgpath(sesspath, 'func_motion_corrected');
+            funcmotpath = getimgpath(sesspath, 'func');
 
             % Save the structural images
-            session.files.struct = check_exist(regex_files(structpath, ['^' struct_norm_prefix '.+\.(img|nii)$']));
+            if loading_mode == 0
+                session.files.struct = check_exist(regex_files(structpath, ['^.+\.(img|nii)$']));
+            else
+                session.files.struct = check_exist(regex_files(structpath, ['^' struct_norm_prefix '.+\.(img|nii)$']));
+            end
             session.isstructshared = isstructshared;
             % Save functional motion artifacts corrected, realigned, smoothed images
-            session.files.func = check_exist(regex_files(funcpath, ['^' func_smoothed_prefix '.+\.(img|nii)$']));
-            % Save regions of interests (we expect 3 different ROIs: 1,2,3 respectively for grey matter, white matter and CSF)
-            session.files.roi = struct('grey', [], 'white', [], 'csf', []);
-            session.files.roi.grey = check_exist(regex_files(structpath, ['^' struct_segmented_grey_prefix '.+\.(img|nii)$']));
-            session.files.roi.white = check_exist(regex_files(structpath, ['^' struct_segmented_white_prefix '.+\.(img|nii)$']));
-            session.files.roi.csf = check_exist(regex_files(structpath, ['^' struct_segmented_csf_prefix '.+\.(img|nii)$']));
-            % Covariates 1st-level
-            % ART movement artifacts correction
-            session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_*(' func_smoothed_prefix '.+)?\.mat$']));
+            if loading_mode == 0
+                session.files.func = check_exist(regex_files(funcpath, ['^.+\.(img|nii)$']));
+            else
+                session.files.func = check_exist(regex_files(funcpath, ['^' func_smoothed_prefix '.+\.(img|nii)$']));
+            end
+
+            if loading_mode == 1
+                % Save regions of interests (we expect 3 different ROIs: 1,2,3 respectively for grey matter, white matter and CSF)
+                session.files.roi = struct('grey', [], 'white', [], 'csf', []);
+                session.files.roi.grey = check_exist(regex_files(structpath, ['^' struct_segmented_grey_prefix '.+\.(img|nii)$']));
+                session.files.roi.white = check_exist(regex_files(structpath, ['^' struct_segmented_white_prefix '.+\.(img|nii)$']));
+                session.files.roi.csf = check_exist(regex_files(structpath, ['^' struct_segmented_csf_prefix '.+\.(img|nii)$']));
+                % Covariates 1st-level
+                % ART movement artifacts correction
+                session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_*(' func_smoothed_prefix '.+)?\.mat$']));
+            end
+
             % Remove first x functional volumes (to avoid fMRI coil gradient calibration bias)
             if nb_first_volumes_to_remove > 0
                 session.files.func = session.files.func(nb_first_volumes_to_remove+1:end);
@@ -197,7 +218,7 @@ end
 % Sanity checks
 fprintf('Sanity checks...\n');
 % 1. Check globally that there are any loaded images, else the tree structure is obviously wrong
-if isempty(data.groups(:)); error('Cannot find any subject group! Please check your dataset directories structure.'); end;
+if isempty(data.groups(:)); error('Cannot find any subject group! Please check your dataset directories structure, it should be: <group>/<subject>/data/<session>/(mprage|rest)/*.(img|nii)'); end;
 check_cond = data.groups{:};
 if isempty(check_cond.subjects(:)); error('Cannot find any subject! Please check your dataset directories structure.'); end;
 check_subj = check_cond.subjects{:}; % MATLAB does not support chaining {:} (eg, a{:}.b{:}) so we need to split this command on several lines...
@@ -218,10 +239,13 @@ for g=1:length(data.groups)
         for sessid=1:length(data.groups{g}.subjects{s}.sessions)
             subjfile = data.groups{g}.subjects{s}.sessions{sessid}.files;
             if isempty(subjfile.struct); error('No structural image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+            if iscell(subjfile.struct) && (numel(subjfile.struct) > 1); error('Multiple structural image found for group %s subject %s session %s. Need only one structural per subject and session. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
             if isempty(subjfile.func); error('No functional image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
-            if isempty(subjfile.roi.grey); error('No segmented grey matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
-            if isempty(subjfile.roi.white); error('No segmented white matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
-            if isempty(subjfile.roi.csf); error('No segmented csf matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+            if loading_mode == 1
+                if isempty(subjfile.roi.grey); error('No segmented grey matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+                if isempty(subjfile.roi.white); error('No segmented white matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+                if isempty(subjfile.roi.csf); error('No segmented csf matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+            end
         end % end for sessions
     end % end for subjects
 end % end for groups
@@ -299,12 +323,14 @@ for g=1:length(groups)
             end
             % Add functional images
             CONN_x.Setup.functionals{sid}{sessid} = char(sessions{sessid}.files.func); % convert cell array to char array for CONN
-            % ROI masks (= segmented grey/white/csf images)
-            CONN_x.Setup.masks.Grey{sid}{sessid} = sessions{sessid}.files.roi.grey;
-            CONN_x.Setup.masks.White{sid}{sessid} = sessions{sessid}.files.roi.white;
-            CONN_x.Setup.masks.CSF{sid}{sessid} = sessions{sessid}.files.roi.csf;
-            % Covariates 1st-level
-            CONN_x.Setup.covariates.files{1}{sid}{sessid} = sessions{sessid}.files.covars1.movement;
+            if loading_mode == 1
+                % ROI masks (= segmented grey/white/csf images)
+                CONN_x.Setup.masks.Grey{sid}{sessid} = sessions{sessid}.files.roi.grey;
+                CONN_x.Setup.masks.White{sid}{sessid} = sessions{sessid}.files.roi.white;
+                CONN_x.Setup.masks.CSF{sid}{sessid} = sessions{sessid}.files.roi.csf;
+                % Covariates 1st-level
+                CONN_x.Setup.covariates.files{1}{sid}{sessid} = sessions{sessid}.files.covars1.movement;
+            end
         end % for sessions
     end % for subjects
 end % for groups
@@ -316,8 +342,11 @@ CONN_x.Setup.subjects.groups = [];
 for g=1:length(groups)
     CONN_x.Setup.subjects.groups = [CONN_x.Setup.subjects.groups ones(1, length(subjects{g}.names))*g];
 end
-CONN_x.Setup.subjects.effect_names = {'AllSubjects'};
-CONN_x.Setup.subjects.effects{1} = ones(1, subjects_total);
+if conn_ver < 17
+    % CONN equal or below version 16 required a covariate "AllSubjects" and a condition "AllSessions" to allow Dynamic Functional Connectivity analysis analysis
+    CONN_x.Setup.subjects.effect_names = {'AllSubjects'};
+    CONN_x.Setup.subjects.effects{1} = ones(1, subjects_total);
+end
 
 % CONDITIONS DURATION
 % Here, we want to look at the difference between the sessions (pre-post kind of experiment), so the different conditions are considered to be the difference between the sessions, so the conditions are the same as the sessions
@@ -348,17 +377,21 @@ if disable_conditions == 0
             CONN_x.Setup.conditions.durations{ncond}{nsub}{nses} = [];
         end
     end;end;end     % rest condition (all sessions)
-    % Add a special condition that will include absolutely all subjects, this allows Dynamic Functional Connectivity to work
-    CONN_x.Setup.conditions.names = [CONN_x.Setup.conditions.names {'AllSessions'}];
-    for ncond=nconditions+1,for nsub=1:subjects_total,for nses=1:length(CONN_x.Setup.functionals{nsub})
-        CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses}=0;
-        CONN_x.Setup.conditions.durations{ncond}{nsub}{nses}=inf;
-    end;end;end     % rest condition (all sessions)
+    if conn_ver < 17
+        % CONN equal or below version 16 required a covariate "AllSubjects" and a condition "AllSessions" to allow Dynamic Functional Connectivity analysis
+        CONN_x.Setup.conditions.names = [CONN_x.Setup.conditions.names {'AllSessions'}];
+        for ncond=nconditions+1,for nsub=1:subjects_total,for nses=1:length(CONN_x.Setup.functionals{nsub})
+            CONN_x.Setup.conditions.onsets{ncond}{nsub}{nses}=0;
+            CONN_x.Setup.conditions.durations{ncond}{nsub}{nses}=inf;
+        end;end;end     % rest condition (all sessions)
+    end
 end
 
 % COVARIATES LEVEL-1: intra-subject covariates: artifacts we will regress (remove)
-CONN_x.Setup.covariates.names = {'movement'};
-CONN_x.Setup.covariates.add = 0;
+if loading_mode == 1
+    CONN_x.Setup.covariates.names = {'movement'};
+    CONN_x.Setup.covariates.add = 0;
+end
 
 % ROIs maps
 if length(path_to_roi_maps) > 0
@@ -389,7 +422,9 @@ end
 % ANALYSIS
 CONN_x.Analysis.type = 3; % do all analyses at once, we will explore and choose them later
 % ROI-to-ROI and Seed-to-Voxel
-CONN_x.Analysis.sources = CONN_x.Setup.rois.names; % Use all ROIs
+if length(path_to_roi_maps) > 0 % avoid a NaN bug during analysis if no ROI is provided
+    CONN_x.Analysis.sources = CONN_x.Setup.rois.names; % Use all ROIs
+end
 % Voxel-to-voxel
 % Note that conn_batch cannot do all 1st-level analyses, if you specify Analysis.measures then it will compute only Voxel-to-Voxel analysis, else only ROI-to-ROI/Seed-to-Voxel analysis (but we workaround that by calling conn_process directly for the other analyses, see below)
 if conn_ver < 17
@@ -504,7 +539,10 @@ function fpath = getimgpath(dirpath, imtype)
     fpath = '';
     switch imtype
         case 'struct'  % anatomical images (T1 aka structural) folder
-            fpath = fullfile(dirpath, 'mprage');
+            fpath = fullfile(dirpath, 'mprage', 'mri');  % compatibility with CAT12
+            if ~(exist(fpath, 'dir') == 7)
+                fpath = fullfile(dirpath, 'mprage');
+            end
         case 'func' % functional images (T2) folder
             fpath = fullfile(dirpath, 'rest');
         case 'func_motion_corrected'

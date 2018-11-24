@@ -1,7 +1,9 @@
 #!/bin/bash
-# Single subject Multi-Shell DTI analysis WITHOUT ACT but with movement correction for the Coma Science Group, by Stephen Larroque (2018).
-# Required libraries: dcmtk dcmdjpeg (just to uncompress), mrtrix v3, trackvis, FSL, ANTS, Python 2.
-# v2.0.1
+# Single subject Multi-Shell DTI analysis WITHOUT ACT but with movement correction for the Coma Science Group, by Stephen Karl Larroque (2018).
+# Required libraries: dcmtk dcmdjpeg (just to uncompress), mrtrix v3, trackvis, FSL, ANTS, Python 2.7.x
+# v2.0.3
+# License: MIT
+#
 # Tested on 19-07-2018 to latest MRTRIX3 github commit (post 3.0 RC3): d6656921594f22517d489a7f9f2d2598bcf18ce6
 # Also requires eddy v5.0.11 (for movement/slice timing correction and multishell acquired in separate sequences)
 # IMPORTANT: you need to specify a slspec.txt file with the slice order. If you don't have it or do not wish to correct for this type of motion, remove the 5 last parameters from eddy/dwipreproc command: --mporder=6 --slspec=my_slspec.txt --s2v_niter=5 --s2v_lambda=1 --s2v_interp=trilinear
@@ -26,12 +28,13 @@ SCRIPTPATH=$(dirname "$SCRIPT")
 SCRIPTNAME=$(basename "$0")
 
 # Help message
-if [ $# -lt 1 ]; then
+if [ "$#" -lt 1 ] || [ "$1" == "--help" ]; then
     echo "Usage: ./$SCRIPTNAME /path/to/root/of/dicom/dir/"
     echo "Note: input should be dicom folder with subdirectories being modalities, do not input niftis! (because mrtrix is more precise to extract gradients and dti image)."
     echo "Please first extract the DWI with this command: mrconvert . dwi.mif"
     echo "If the DTI was acquired in multiple separate sequences, please use mrcat . . . dwi.mif with as many dots as there are shells, and select each shell one after the other, they will all be converted and concatenated in one go in a single mif file (MRTRIX3 will automatically detect the bval 0 scans, even in the middle, so no need for dwiextract)."
     echo "Please also provide a slspec.txt file describing the slice order of acquisition, see this file's header in the sourcecode for more info."
+    echo "Tip: If you get the error \"UnicodeDecodeError: 'utf8' codec can't decode byte 0xe9 in position 11: invalid continuation byte\", it means you have an accentuated character in the comments in the header of your .mif file. To fix this, simply open the dwi.mif file with SublimeText and replace accentuated characters in the beginning of the file (\"comments\" lines) - note it is VERY important to REPLACE accentuated characters but do not delete, else MRTRIX will complain about a size mismatch."
     exit
 fi
 
@@ -77,6 +80,13 @@ if [ "$choice_slcorr" -eq "0" ]; then
 fi
 echo "Automatic phase encoding? [0 for AP with no reverse phase, 1 for automatic]"
 read choice_phaseencoding
+if ! hash N4BiasFieldCorrection 2>/dev/null; then
+    echo "ANTS N4BiasFieldCorrection command not found, are you sure you want to continue with FSL inhomogeneity correction (which is strongly dependent on initial brain mask)? [y/n]"
+    read choice_inhcorr
+    if [ "$choice_inhcorr" = "n" ]; then
+        exit
+    fi
+fi
 
 # Start DTI preprocessing
 echo "== Starting DTI part 1"
@@ -89,7 +99,7 @@ fi
 # Eddy & between volume motion & inhomogeneity correction
 if [ "$choice_slcorr" -eq "1" ]; then
     # With slice motion correction with autodetected slice timing from DICOM
-    # TODO: use eddy_cuda and not eddy_openmp (there is no eddy anymore in latest releases), as only the cuda version will have the newest features per the documentation
+    # This will automatically use eddy_cuda if available as it is faster and has the newest features per the FSL documentation, else MRTRIX3 dwipreproc automatically fallsback to eddy_openmp
     # TODO: provide dwipreproc with EPI readout time (normally if all b0 scans have the same readout time it's not necessary per doc): -readout_time 0.1
     # Note: if you don't know the phase encoding and you use nifti files (instead of mif files), set -rpe_none instead of -rpe_header
     # Note2: if using .mif file, and the DICOM contains slice timing information, there is no need for the --slspec=my_sliceorder.txt argument, MRTRIX3 can detect the appropriate slice order automatically
@@ -102,7 +112,11 @@ else
     dwipreproc dwi.mif dwicorr.mif $phaseencoding -eddy_options " --verbose --data_is_shelled --repol --fwhm=10,0,0,0,0 --slm=linear $multiband" -info
 fi
 # More bias correction
-dwibiascorrect dwicorr.mif dwicorrunbias.mif -ants # -ants is advised for better masking than -fsl
+if hash N4BiasFieldCorrection 2>/dev/null; then
+    dwibiascorrect dwicorr.mif dwicorrunbias.mif -ants # -ants is advised for better masking than -fsl
+else
+    dwibiascorrect dwicorr.mif dwicorrunbias.mif -fsl # worst case, we fall back to FSL
+fi
 echo "== Starting DTI part 2"
 dwi2mask dwicorr.mif mask.mif
 dwi2mask dwicorr.mif mask.nii # create for visualization

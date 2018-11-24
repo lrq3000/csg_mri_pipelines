@@ -1,7 +1,9 @@
 #!/bin/bash
-# Single subject Single-Shell DTI analysis WITHOUT ACT for the Coma Science Group, by Stephen Larroque (2018).
+# Single subject Single-Shell DTI analysis WITHOUT ACT for the Coma Science Group, by Stephen Karl Larroque (2018).
 # Required libraries: dcmtk dcmdjpeg (just to uncompress), mrtrix v3, trackvis, FSL, Python 2, ANTS.
 # v2.0.0
+# License: MIT
+#
 # Tested on 19-07-2018 to latest MRTRIX3 github commit (post 3.0 RC3): d6656921594f22517d489a7f9f2d2598bcf18ce6
 # Also requires eddy v5.0.11 (for movement/slice timing correction and multishell acquired in separate sequences)
 # IMPORTANT: you need to specify a slspec.txt file with the slice order. If you don't have it or do not wish to correct for this type of motion, select the appropriate choice at the prompt.
