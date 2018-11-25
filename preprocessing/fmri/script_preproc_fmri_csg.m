@@ -26,7 +26,7 @@ function script_preproc_fmri_csg()
 % 2016-2018
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2018
-% v2.1.0b
+% v2.1.3b
 % License: MIT
 %
 % TODO:
@@ -70,6 +70,7 @@ refslice = 'first';  % reference slice for slice timing correction. Can either b
 % * Module order: slice timing correction first or motion correction (realignment) first?
 %stc_or_motion_first = 'auto'; % NOT SUPPORTED because anyway for our use case, it is useless, we should always use slice time correction first as we expect a lot of movement
 % Keep non-smoothed normalized functional bold timeseries?
+% (but note that if an error happens, you'll have to redo the whole preprocessing!)
 keep_normalized_timeseries = 1; % 1: keep, 0: delete
 % Smoothing kernel (isotropic)
 smoothingkernel = 8;
@@ -223,6 +224,10 @@ for c = 1:length(conditions)
                 end
 
                 % add new session into slice timing
+                % IMPORTANT: make sure all batches have the functional
+                % named file selector named: "Functional" (and not just
+                % "Func" nor "functional" for example!), else you might get
+                % very weird errors (eg, files processed from wrong parent!)
                 matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1) = cfg_dep(sprintf('Named File Selector: Functional(%i) - Files', isess), substruct('.','val', '{}',{2}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','files', '{}',{isess}));
 
                 % idem for realignment
@@ -234,7 +239,7 @@ for c = 1:length(conditions)
                 elseif (script_mode == 0) || (script_mode == 2)
                     coregbaseidx = 6;
                 end
-                matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(isess) = cfg_dep(sprintf('Realign: Estimate & Reslice: Realigned Images (Sess %i)', isess), substruct('.','val', '{}',{4}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{isess}, '.','cfiles'));
+                matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(isess) = cfg_dep(sprintf('Realign: Estimate & Reslice: Resliced Images (Sess %i)', isess), substruct('.','val', '{}',{4}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{isess}, '.','rfiles')); % rfiles = resliced images, cfiles = realigned images
 
 % DROPPED due to too much complex coding and maintenance, the Expand Frames
 % module (and thus 4D nifti) was dropped. If the Expand Frames module could
@@ -323,7 +328,7 @@ for c = 1:length(conditions)
                 end
                 % Sanity check: ensure only one structural is selected (else
                 % datat is probably already preprocessed)
-                if size(sdata,1) > 1
+                if (size(sdata,1) > 1) && ~skip_preprocessing
                     error('Multiple structural images found! Please check your input data, delete previously preprocessed data if necessary.');
                 end
                 if script_mode == 0
@@ -411,8 +416,14 @@ for c = 1:length(conditions)
                     matlabbatchall{matlabbatchall_counter}{6}.spm.tools.oldseg.opts.tpm = template_seg_cell;
                     % Smoothing parameters
                     % Note: for SPM pipelines (ie, without VBM8 nor CAT12), the smoothing is done directly inside the batch. For CAT12/VBM8 however it's not possible, so the smoothing is done separately in another dynamically constructed batch (see below)
-                    matlabbatchall{matlabbatchall_counter}{9}.spm.spatial.smooth.fwhm = [smoothingkernel smoothingkernel smoothingkernel];
-                    matlabbatchall{matlabbatchall_counter}{9}.spm.spatial.smooth.prefix = ['s' int2str(smoothingkernel)];
+                    if resizeto3
+                        % If resizeto3, then we don't smooth here as we
+                        % will do it afterward, after the resize
+                        matlabbatchall{matlabbatchall_counter}(9) = []; % note the round braces (and not curly) to act on the cell and not the cell's content
+                    else
+                        matlabbatchall{matlabbatchall_counter}{9}.spm.spatial.smooth.fwhm = [smoothingkernel smoothingkernel smoothingkernel];
+                        matlabbatchall{matlabbatchall_counter}{9}.spm.spatial.smooth.prefix = ['s' int2str(smoothingkernel)];
+                    end
                 elseif script_mode == 3
                     % SPM12 Unified segmentation templates config
                     for i = 1:6
@@ -420,8 +431,14 @@ for c = 1:length(conditions)
                     end
                     % Smoothing parameters
                     % Note: for SPM pipelines (ie, without VBM8 nor CAT12), the smoothing is done directly inside the batch. For CAT12/VBM8 however it's not possible, so the smoothing is done separately in another dynamically constructed batch (see below)
-                    matlabbatchall{matlabbatchall_counter}{8}.spm.spatial.smooth.fwhm = [smoothingkernel smoothingkernel smoothingkernel];
-                    matlabbatchall{matlabbatchall_counter}{8}.spm.spatial.smooth.prefix = ['s' int2str(smoothingkernel)];
+                    if resizeto3
+                        % If resizeto3, then we don't smooth here as we
+                        % will do it afterward, after the resize
+                        matlabbatchall{matlabbatchall_counter}(8) = []; % note the round braces (and not curly) to act on the cell and not the cell's content
+                    else
+                        matlabbatchall{matlabbatchall_counter}{8}.spm.spatial.smooth.fwhm = [smoothingkernel smoothingkernel smoothingkernel];
+                        matlabbatchall{matlabbatchall_counter}{8}.spm.spatial.smooth.prefix = ['s' int2str(smoothingkernel)];
+                    end
                 end
             end %end if sharedmri
 
@@ -531,37 +548,26 @@ for c = 1:length(conditions)
                 artbatchall{matlabbatchall_counter} = [];
                 datapath = fullfile(data(isub).sessions{isess}.dir, 'rest');
                 if art_before_smoothing
-                    smoothprefix = '';
+                    % Do ART before smoothing AND resizing
+                    dataMotion = get_rfdata(data, isub, isess, script_mode, resizeto3);
                 else
+                    % Do ART on smoothed images (but use the rp_*.txt file
+                    % nevertheless?)
                     smoothprefix = ['s' int2str(smoothingkernel)];
+                    dataMotion = get_sfdata(data, isub, isess, script_mode, resizeto3, smoothprefix);
                 end
-                if (script_mode == 0) || (script_mode == 2)
-                    if keep_normalized_timeseries == 0
-                        if resizeto3
-                            delete(fullfile(datapath, 'rwa*.*'));
-                        else
-                            delete(fullfile(datapath, 'wa*.*'));
-                        end
-                    end
-                    if resizeto3
-                        dataMotion = spm_select('FPList', datapath, ['^' smoothprefix 'rwa'  '.*\.(img|nii)$']);
-                    else
-                        dataMotion = spm_select('FPList', datapath, ['^' smoothprefix 'wa'  '.*\.(img|nii)$']);
-                    end
-                elseif (script_mode == 1) || (script_mode == 3)
-                    if keep_normalized_timeseries == 0
-                        if resizeto3
-                            delete(fullfile(datapath, 'rwra*.*'));
-                        else
-                            delete(fullfile(datapath, 'wra*.*'));
-                        end
-                    end
-                    if resizeto3
-                        dataMotion = spm_select('FPList', datapath, ['^' smoothprefix 'rwra'  '.*\.(img|nii)$']);
-                    else
-                        dataMotion = spm_select('FPList', datapath, ['^' smoothprefix 'wra'  '.*\.(img|nii)$']);
-                    end
+                if keep_normalized_timeseries == 0
+                    % Delete normalized (but non-smoothed) timeseries (but
+                    % note that if an error happens, you'll have to redo
+                    % the whole preprocessing!)
+
+                    %delete(fullfile(datapath, 'rwa*.*')); % easy way but
+                    %then we have to manage manually resizeto3, we don't
+                    %need to since we have get_sfdata
+                    delete(get_sfdata(data, isub, isess, script_mode, resizeto3));
+                    delete(get_rfdata(data, isub, isess, script_mode, resizeto3));
                 end
+
                 % Detect if 4D, we need to expand
                 % WARNING: does not work, use SPM expand frames instead
                 %dataMotion_nbframes = spm_select_get_nbframes(dataMotion(1,:));
@@ -662,7 +668,9 @@ if strcmp(motionRemovalTool,'art')
                 fprintf(1, '---- PROCESSING CONDITION %s SUBJECT %i (%s) SESSION %s ----\n', conditions{c}, isub, data(isub).name, data(isub).sessions{isess}.id);
                 datapath = fullfile(data(isub).sessions{isess}.dir, 'rest');
                 art_batch(fullfile(datapath, 'SPM.mat'));
-                %close all; % close all opened windows, because art toolbox is opening a new one everytime
+                % close all opened windows, because art toolbox is opening a new one everytime
+                fclose all;
+                close all;
             end %end for sessions
         end % end for subjects
     end % end for conditions
@@ -723,7 +731,10 @@ function [rfdata] = get_rfdata(data, isub, isess, script_mode)
     end
 end
 
-function [sfdata] = get_sfdata(data, isub, isess, script_mode, resizeto3)
+function [sfdata] = get_sfdata(data, isub, isess, script_mode, resizeto3, addprefix)
+    if ~exist('addprefix', 'var')
+        addprefix = '';
+    end
     %subjname = data(isub).funct;
     dirpath = fullfile(data(isub).sessions{isess}.dir,'rest');
     if (script_mode == 0) || (script_mode == 2)
@@ -741,6 +752,18 @@ function [sfdata] = get_sfdata(data, isub, isess, script_mode, resizeto3)
     end
     [sfdata]=spm_select('FPList',dirpath,strcat('^',prefix,'.+\.(img|nii)$'));
     %sfdata = char(regex_files(dirpath,strcat('^',prefix,'.+\.(img|nii)$')));
+    % Add the prefix, we can't do it in the spm_select call because the
+    % files might not exist at the time, so we artificially rebuild the
+    % path
+    if ~isempty(addprefix)
+        sfdata2 = [];
+        for i = 1:size(sfdata, 1)
+            [dir, fname, fext] = fileparts(sfdata(i,:));
+            sfdata2(i,:) = fullfile(dir,[addprefix fname fext]);
+        end
+        % Convert to a char array
+        sfdata = char(sfdata2);
+    end
     if isempty(sfdata) % check if any file is in this folder
         error('No file detected in folder %s\nPlease check this folder contains neuroimage files!', dirpath);
     end
@@ -866,14 +889,14 @@ function run_jobs(matlabbatchall, parallel_processing, matlabbatchall_infos)
     end
 end %endfunction
 
-function save_batch(jobsdir, batch, jobname, script_mode, subjname)
+function save_batch(jobsdir, matlabbatch, jobname, script_mode, subjname)
 % Save a batch as a .mat file in the specified jobsdir folder
     if ~exist(jobsdir)
         mkdir(jobsdir)
     end
     prevfolder = cd();
     cd(jobsdir);
-    save(['jobs_' jobname '_mode' int2str(script_mode) '_' subjname '_' datestr(now,30)], 'batch')
+    save(['jobs_' jobname '_mode' int2str(script_mode) '_' subjname '_' datestr(now,30)], 'matlabbatch')
     cd(prevfolder);
 end %endfunction
 
