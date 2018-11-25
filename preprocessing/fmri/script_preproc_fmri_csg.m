@@ -3,6 +3,8 @@ function script_preproc_fmri_csg()
 % Script for preprocessing of functional and structural MRI data before further functional MRI analysis (usually through CONN toolbox).
 % No fieldmaps correction, but works on several sessions (several conditions / subjects, automatically detected by file walking),
 %
+% This script should work on all platforms where MATLAB and SPM are supported (Windows, Linux, MacOSX).
+%
 % Artifact Detection: detection of global mean and motion outliers in the
 % fmri data using the art toolbox (composite motion measures). According to Alfonso Nieto-Castanon: «It is similar to framewise displacement but not exactly the same ("framewise displacement" converts angular differences to mm by multiplying by a constant factor -projecting to a sphere-, and then sums the 6 individual translation/rotation displacement absolute measures; ART's "composite motion" measure estimates instead the maximum voxel displacement resulting from the combined effect of the individual translation and rotation displacement measures)». Ref: https://www.nitrc.org/forum/forum.php?thread_id=5792&forum_id=398
 %
@@ -26,7 +28,7 @@ function script_preproc_fmri_csg()
 % 2016-2018
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2018
-% v2.1.3b
+% v2.1.5b
 % License: MIT
 %
 % TODO:
@@ -77,7 +79,7 @@ smoothingkernel = 8;
 % Resize functional to 3x3x3 before smoothing
 resizeto3 = false;
 % Parallel preprocessing?
-parallel_processing = true;
+parallel_processing = false;
 % ART input files
 art_before_smoothing = false; % At CSG, we always did ART on post-smoothed data, but according to Alfonso Nieto-Castanon, ART should be done before smoothing: https://www.nitrc.org/forum/message.php?msg_id=10652
 % Skip preprocessing steps (to do only post-processing?) - useful in case
@@ -148,10 +150,14 @@ fprintf(1, 'Note7: If you get the error "Improper assignment with rectangular em
 fprintf(1, 'Note8: If you get the error "subsref, Reference to non-existent element of a cell array" as soon as the first subject gets processed ("Running job #1" is not even displayed yet) then please check that you have correctly installed all the required libraries (particularly VBM8 in spm/toolbox folder).\n');
 fprintf(1, 'Note9: If you get the error "Cant map view of file.  It may be locked by another program.", then either you modified the script and something opened an image and did not release it , else if you did not change the script, you are using 4D nifti files that are too big for your memory or filesystem, then you need to convert them into 3D nifti.\n\n');
 
+% Start ticking
+tic
+
 % Sanity check + autodetection
 % check number of slices is correct for all subjects (if nslices is > 0, else it will be skipped)
 % and autodetect EPI parameters
 fprintf(1, '\n\n-------------------------\n=== SANITY CHECKS ===\n\n');
+filescount = 0;
 for c = 1:length(conditions)
     % Get the data structure for all subjects for this condition
     data = get_data(fullfile(root_pth, conditions{c}), subjects{c});
@@ -161,6 +167,7 @@ for c = 1:length(conditions)
         for isess = 1:length(data(isub).sessions)
             % Load list of functional images
             fdata = get_fdata(data, isub, isess);
+            filescount = filescount + size(fdata, 1);
 
             if nslices > 0 % no autodetect for nslices?
                 % Load first image in folder
@@ -183,13 +190,15 @@ for c = 1:length(conditions)
                 slice_order_auto{c}{isub}{isess}.slice_order = autores_so;
                 slice_order_auto{c}{isub}{isess}.TR = autores_tr;
                 slice_order_auto{c}{isub}{isess}.nslices = autores_nslices;
-                if isempty(autores_so) | autores_tr == 0 | autores_nslices == 0
-                    fprintf('ERROR: autodetection impossible for this session, cannot proceed further, please either process this session separately or fill manually the EPI parameters!\n');
-                    return;
+                if isempty(autores_so) || (autores_tr == 0) || (autores_nslices == 0)
+                    error('Autodetection impossible for this session, cannot proceed further, please either process this session separately or fill manually the EPI parameters!');
                 end
             end
         end
     end
+end
+if filescount == 0
+    error('No files detected! Please check that your root_pth is organized according to the required layout: /root_pth/<subject_id>/data/<sess_id>/(mprage|rest)/*.(img|hdr)');
 end
 
 % Jobs preparation loop!
@@ -228,7 +237,19 @@ for c = 1:length(conditions)
                 % named file selector named: "Functional" (and not just
                 % "Func" nor "functional" for example!), else you might get
                 % very weird errors (eg, files processed from wrong parent!)
-                matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1) = cfg_dep(sprintf('Named File Selector: Functional(%i) - Files', isess), substruct('.','val', '{}',{2}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','files', '{}',{isess}));
+                if script_mode == 0
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1) = cfg_dep;
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tname = 'Session';
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(1).name = 'class';
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(1).value = 'cfg_files';
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(2).name = 'strtype';
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(2).value = 'e';
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).sname = sprintf('Named File Selector: Functional(%i) - Files', isess);
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).src_exbranch = substruct('.','val', '{}',{2}, '.','val', '{}',{1});
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).src_output = substruct('.','files', '{}',{isess});
+                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 3)
+                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1) = cfg_dep(sprintf('Named File Selector: Functional(%i) - Files', isess), substruct('.','val', '{}',{2}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','files', '{}',{isess}));
+                end
 
                 % idem for realignment
                 matlabbatchall{matlabbatchall_counter}{4}.spm.spatial.realign.estwrite.data{isess}(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', isess), substruct('.','val', '{}',{3}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{isess}, '.','files'));
@@ -676,6 +697,7 @@ if strcmp(motionRemovalTool,'art')
     end % end for conditions
 end % endif
 
+toc % show the time it took to compute everything
 fprintf('All jobs done! Restoring path and exiting...\n');
 path(bakpath); % restore the path to the previous state
 diary off;
