@@ -1,0 +1,1 @@
+Structural MRI analysis pipeline using VBM8 and SPM8. The entry script is vbm_script_preproc_csg.m (requires MATLAB) and also needs Python with PILLOW if you want to automatically generate result images.
