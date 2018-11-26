@@ -11,7 +11,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) to generate the final stitched image, but if you want to do it yourself it is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v0.5.3
+% v0.5.4
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2018
 % LICENSE: MIT
@@ -28,8 +28,8 @@ clear classes;
 % Initialization variables, PLEASE EDIT ME
 rootpath_multi = 'X:\Path\To\MultipleSubjectsData'; % Set here the path to a directory of multiple groups, subjects and sessions to process multiple subjects at once. Else set to empty string to rather use rootpath_single. In this case, this should follow the same structure as the fmri preprocessing script: rootpath_multi/<Group>/<Subject>/data/<Session>/mprage/*.(nii|img)
 rootpath_single = 'X:\Path\To\OneSubject\mprage\T1.nii'; % If you want to process only one subject, set here the full path to the T1 (extension: nii or img).
-controlspath_greyonly = 'X:\Path\To\VBM_Controls\'; % controls images, must be generated using the same template AND grey only. If you don't have these images, run this pipeline on a set of healthy volunteers' T1 images with skipresults set to 1.
-controlspath_greywhite = 'X:\Path\To\VBM_Controls_WhitePlusGrey\'; % controls images, grey + white, only necessary if you set skipgreypluswhite = 0
+controlspath_greyonly = 'X:\Path\To\VBM_Controls\'; % controls images, must be generated using the same template AND grey only. If you don't have these images, run this pipeline on a set of healthy volunteers' T1 images with skip2ndlevel set to 1. Also this path is useless if skip2ndlevel is set to 1.
+controlspath_greywhite = 'X:\Path\To\VBM_Controls_WhitePlusGrey\'; % controls images, grey + white, only necessary if you set skipgreypluswhite = 0. Skipped if skip2ndlevel = 1 or skipgreypluswhite = 1.
 path_to_spm8 = 'C:\matlab_tools\spm8';
 path_to_spm8_tissue_proba_map = 'C:\matlab_tools\spm8\toolbox\Seg\TPM.nii';
 path_to_vbm8 = 'C:\matlab_tools\spm8\toolbox\vbm8';
@@ -39,7 +39,8 @@ skip1stlevel = 0; % only do 2nd-level analysis, skip preprocessing (particularly
 skipcsfmask = 0; % do not apply a CSF exclusion mask in the results in SPM.mat
 significance = 'fdr'; % 'fdr' by default, or 'unc'. Can skip1stlevel if you just change significance but already done the preprocessing once.
 skipgreypluswhite = 1; % skip grey+white matters analysis? (if true, then will do only grey matter analysis, if false then will do both) - grey+white is disadvised, it was an experimental approach that was dropped due to inconsistent results
-skipresults = 0; % if you only want to do VBM preprocessing but not compare against controls, set this to 1
+skip2ndlevel = 0; % if you only want to do VBM preprocessing but not compare against controls, set this to 1
+skipresults = 0; % if you do not want to generate the result images from the 2nd level results (requires skip2ndlevel set to 0)
 
 % --- Start of main script
 fprintf(1, '\n=== VBM PREPROCESSING AND ANALYSIS ===\n');
@@ -204,83 +205,85 @@ for t=1:length(T1fileslist)
         matlabbatch{moduleid}.spm.util.imcalc.options.interp = 1;
         matlabbatch{moduleid}.spm.util.imcalc.options.dtype = 4;
 
-        % == Group comparison (2nd-level analysis: patient against controls)
-        moduleid = moduleid + 1;
-        matlabbatch{moduleid}.spm.stats.factorial_design.dir = {rootpath};
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1) = cfg_dep;
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tname = 'Group 1 scans';
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tgt_spec{1}(1).name = 'filter';
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tgt_spec{1}(1).value = 'image';
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tgt_spec{1}(2).name = 'strtype';
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tgt_spec{1}(2).value = 'e';
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).sname = 'Smooth: Smoothed Images';
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).src_exbranch = substruct('.','val', '{}',{moduleid-2}, '.','val', '{}',{1}, '.','val', '{}',{1});
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).src_output = substruct('.','files');
-        % Get list of controls images for the control group
-        if i == 2
-            controlsimgs = check_exist(regex_files(controlspath_greywhite, '^.+\.(img|nii)$'));
-        else
-            controlsimgs = check_exist(regex_files(controlspath_greyonly, '^.+\.(img|nii)$'));
-        end % endif
-        % Use only first volume for each image
-        for s=1:length(controlsimgs)
-            controlsimgs{s} = strcat(controlsimgs{s}, ',1');
-        end %endif
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans2 = controlsimgs'; % transpose (else you might run into "CAT arguments dimensions are not consistent." error). Can also sometimes do {cellstr(controlsimgs}'.
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.dept = 0;
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.variance = 0;
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.gmsca = 0;
-        matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.ancova = 0;
-        matlabbatch{moduleid}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
-        matlabbatch{moduleid}.spm.stats.factorial_design.masking.tm.tma.athresh = 0.1;
-        matlabbatch{moduleid}.spm.stats.factorial_design.masking.im = 0;
-        if ~skipcsfmask
-            matlabbatch{moduleid}.spm.stats.factorial_design.masking.em = {fullfile(rootpath, 'csf-exclude-mask.img')};
-        end % endif
-        % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1) = cfg_dep;
-        % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tname = 'Explicit Mask';
-        % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tgt_spec{1}(1).name = 'filter';
-        % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tgt_spec{1}(1).value = 'image';
-        % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tgt_spec{1}(2).name = 'strtype';
-        % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tgt_spec{1}(2).value = 'e';
-        % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).sname = 'Image Calculator: Imcalc Computed Image: csf-exclude-mask.img';
-        % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).src_exbranch = substruct('.','val', '{}',{moduleid-1}, '.','val', '{}',{1}, '.','val', '{}',{1});
-        % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).src_output = substruct('.','files');
-        matlabbatch{moduleid}.spm.stats.factorial_design.globalc.g_omit = 1;
-        matlabbatch{moduleid}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
-        matlabbatch{moduleid}.spm.stats.factorial_design.globalm.glonorm = 1;
+        if ~skip2ndlevel
+            % == Group comparison (2nd-level analysis: patient against controls)
+            moduleid = moduleid + 1;
+            matlabbatch{moduleid}.spm.stats.factorial_design.dir = {rootpath};
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1) = cfg_dep;
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tname = 'Group 1 scans';
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tgt_spec{1}(1).name = 'filter';
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tgt_spec{1}(1).value = 'image';
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tgt_spec{1}(2).name = 'strtype';
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).tgt_spec{1}(2).value = 'e';
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).sname = 'Smooth: Smoothed Images';
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).src_exbranch = substruct('.','val', '{}',{moduleid-2}, '.','val', '{}',{1}, '.','val', '{}',{1});
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans1(1).src_output = substruct('.','files');
+            % Get list of controls images for the control group
+            if i == 2
+                controlsimgs = check_exist(regex_files(controlspath_greywhite, '^.+\.(img|nii)$'));
+            else
+                controlsimgs = check_exist(regex_files(controlspath_greyonly, '^.+\.(img|nii)$'));
+            end % endif
+            % Use only first volume for each image
+            for s=1:length(controlsimgs)
+                controlsimgs{s} = strcat(controlsimgs{s}, ',1');
+            end %endif
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.scans2 = controlsimgs'; % transpose (else you might run into "CAT arguments dimensions are not consistent." error). Can also sometimes do {cellstr(controlsimgs}'.
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.dept = 0;
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.variance = 0;
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.gmsca = 0;
+            matlabbatch{moduleid}.spm.stats.factorial_design.des.t2.ancova = 0;
+            matlabbatch{moduleid}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{moduleid}.spm.stats.factorial_design.masking.tm.tma.athresh = 0.1;
+            matlabbatch{moduleid}.spm.stats.factorial_design.masking.im = 0;
+            if ~skipcsfmask
+                matlabbatch{moduleid}.spm.stats.factorial_design.masking.em = {fullfile(rootpath, 'csf-exclude-mask.img')};
+            end % endif
+            % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1) = cfg_dep;
+            % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tname = 'Explicit Mask';
+            % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tgt_spec{1}(1).name = 'filter';
+            % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tgt_spec{1}(1).value = 'image';
+            % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tgt_spec{1}(2).name = 'strtype';
+            % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).tgt_spec{1}(2).value = 'e';
+            % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).sname = 'Image Calculator: Imcalc Computed Image: csf-exclude-mask.img';
+            % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).src_exbranch = substruct('.','val', '{}',{moduleid-1}, '.','val', '{}',{1}, '.','val', '{}',{1});
+            % matlabbatch{moduleid}.spm.stats.factorial_design.masking.em(1).src_output = substruct('.','files');
+            matlabbatch{moduleid}.spm.stats.factorial_design.globalc.g_omit = 1;
+            matlabbatch{moduleid}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+            matlabbatch{moduleid}.spm.stats.factorial_design.globalm.glonorm = 1;
 
-        % == Estimate 2nd-level analysis
-        moduleid = moduleid + 1;
-        matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1) = cfg_dep;
-        matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tname = 'Select SPM.mat';
-        matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(1).name = 'filter';
-        matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(1).value = 'mat';
-        matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(2).name = 'strtype';
-        matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(2).value = 'e';
-        matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).sname = 'Factorial design specification: SPM.mat File';
-        matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).src_exbranch = substruct('.','val', '{}',{moduleid-1}, '.','val', '{}',{1}, '.','val', '{}',{1});
-        matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).src_output = substruct('.','spmmat');
-        matlabbatch{moduleid}.spm.stats.fmri_est.method.Classical = 1;
+            % == Estimate 2nd-level analysis
+            moduleid = moduleid + 1;
+            matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1) = cfg_dep;
+            matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tname = 'Select SPM.mat';
+            matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(1).name = 'filter';
+            matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(1).value = 'mat';
+            matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(2).name = 'strtype';
+            matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).tgt_spec{1}(2).value = 'e';
+            matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).sname = 'Factorial design specification: SPM.mat File';
+            matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).src_exbranch = substruct('.','val', '{}',{moduleid-1}, '.','val', '{}',{1}, '.','val', '{}',{1});
+            matlabbatch{moduleid}.spm.stats.fmri_est.spmmat(1).src_output = substruct('.','spmmat');
+            matlabbatch{moduleid}.spm.stats.fmri_est.method.Classical = 1;
 
-        % == Contrasts predefinition
-        moduleid = moduleid + 1;
-        matlabbatch{moduleid}.spm.stats.con.spmmat(1) = cfg_dep;
-        matlabbatch{moduleid}.spm.stats.con.spmmat(1).tname = 'Select SPM.mat';
-        matlabbatch{moduleid}.spm.stats.con.spmmat(1).tgt_spec{1}(1).name = 'filter';
-        matlabbatch{moduleid}.spm.stats.con.spmmat(1).tgt_spec{1}(1).value = 'mat';
-        matlabbatch{moduleid}.spm.stats.con.spmmat(1).tgt_spec{1}(2).name = 'strtype';
-        matlabbatch{moduleid}.spm.stats.con.spmmat(1).tgt_spec{1}(2).value = 'e';
-        matlabbatch{moduleid}.spm.stats.con.spmmat(1).sname = 'Model estimation: SPM.mat File';
-        matlabbatch{moduleid}.spm.stats.con.spmmat(1).src_exbranch = substruct('.','val', '{}',{moduleid-1}, '.','val', '{}',{1}, '.','val', '{}',{1});
-        matlabbatch{moduleid}.spm.stats.con.spmmat(1).src_output = substruct('.','spmmat');
-        matlabbatch{moduleid}.spm.stats.con.consess{1}.tcon.name = 'Patient''s damages';
-        matlabbatch{moduleid}.spm.stats.con.consess{1}.tcon.convec = [-1 1];
-        matlabbatch{moduleid}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
-        matlabbatch{moduleid}.spm.stats.con.consess{2}.tcon.name = 'Patient''s increases';
-        matlabbatch{moduleid}.spm.stats.con.consess{2}.tcon.convec = [1 -1];
-        matlabbatch{moduleid}.spm.stats.con.consess{2}.tcon.sessrep = 'none';
-        matlabbatch{moduleid}.spm.stats.con.delete = 0;
+            % == Contrasts predefinition
+            moduleid = moduleid + 1;
+            matlabbatch{moduleid}.spm.stats.con.spmmat(1) = cfg_dep;
+            matlabbatch{moduleid}.spm.stats.con.spmmat(1).tname = 'Select SPM.mat';
+            matlabbatch{moduleid}.spm.stats.con.spmmat(1).tgt_spec{1}(1).name = 'filter';
+            matlabbatch{moduleid}.spm.stats.con.spmmat(1).tgt_spec{1}(1).value = 'mat';
+            matlabbatch{moduleid}.spm.stats.con.spmmat(1).tgt_spec{1}(2).name = 'strtype';
+            matlabbatch{moduleid}.spm.stats.con.spmmat(1).tgt_spec{1}(2).value = 'e';
+            matlabbatch{moduleid}.spm.stats.con.spmmat(1).sname = 'Model estimation: SPM.mat File';
+            matlabbatch{moduleid}.spm.stats.con.spmmat(1).src_exbranch = substruct('.','val', '{}',{moduleid-1}, '.','val', '{}',{1}, '.','val', '{}',{1});
+            matlabbatch{moduleid}.spm.stats.con.spmmat(1).src_output = substruct('.','spmmat');
+            matlabbatch{moduleid}.spm.stats.con.consess{1}.tcon.name = 'Patient''s damages';
+            matlabbatch{moduleid}.spm.stats.con.consess{1}.tcon.convec = [-1 1];
+            matlabbatch{moduleid}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
+            matlabbatch{moduleid}.spm.stats.con.consess{2}.tcon.name = 'Patient''s increases';
+            matlabbatch{moduleid}.spm.stats.con.consess{2}.tcon.convec = [1 -1];
+            matlabbatch{moduleid}.spm.stats.con.consess{2}.tcon.sessrep = 'none';
+            matlabbatch{moduleid}.spm.stats.con.delete = 0;
+        end
 
         % == Run the batch!
         % Saving temporary batch
@@ -297,37 +300,39 @@ for t=1:length(T1fileslist)
         % Run the preprocessing pipeline for current subject!
         spm_jobman('run', matlabbatch)
 
-        % Copy the analysis to a specific folder
-        analysiscopyfolder = ['vbm_2ndlevel_ptsvsctr_type' int2str(i)];
-        if i == 1
-            analysiscopyfolder = 'vbm_2ndlevel_ptsvsctr_greyonly';
-        elseif i == 2
-            analysiscopyfolder = 'vbm_2ndlevel_ptsvsctr_greywhite';
-        end
-        acfDir = fullfile(rootpath, analysiscopyfolder);
-        if exist(acfDir,'dir') == 7
-            rmdir(acfDir, 's'); % delete if exists
-        end
-        %mkdir(acfDir); % not necessary, we will create it with copyfile, avoiding "unknown error occurred"
-        try
-            copyfile(fullfile(rootpath, '*'), acfDir, 'f');
-        catch ME
-            % ignore error "unknown error occurred", it will always happen because we are trying to copy all files, the destination folder included
-            % also skip the weird "The requested lookup key was not found in any active activation context", which requires that you uninstall Internet Explorer and reboot
-            if (isempty (strfind (ME.message, 'Unknown error'))) & (isempty (strfind (ME.message, 'The requested lookup key was not found in any active activation context.')))
-                rethrow(ME);
+        if ~skip2ndlevel
+            % Copy the analysis to a specific folder
+            analysiscopyfolder = ['vbm_2ndlevel_ptsvsctr_type' int2str(i)];
+            if i == 1
+                analysiscopyfolder = 'vbm_2ndlevel_ptsvsctr_greyonly';
+            elseif i == 2
+                analysiscopyfolder = 'vbm_2ndlevel_ptsvsctr_greywhite';
             end
-        end
+            acfDir = fullfile(rootpath, analysiscopyfolder);
+            if exist(acfDir,'dir') == 7
+                rmdir(acfDir, 's'); % delete if exists
+            end
+            %mkdir(acfDir); % not necessary, we will create it with copyfile, avoiding "unknown error occurred"
+            try
+                copyfile(fullfile(rootpath, '*'), acfDir, 'f');
+            catch ME
+                % ignore error "unknown error occurred", it will always happen because we are trying to copy all files, the destination folder included
+                % also skip the weird "The requested lookup key was not found in any active activation context", which requires that you uninstall Internet Explorer and reboot
+                if (isempty (strfind (ME.message, 'Unknown error'))) & (isempty (strfind (ME.message, 'The requested lookup key was not found in any active activation context.')))
+                    rethrow(ME);
+                end
+            end
 
-        % Generate the images
-        close all;
-        if ~skipresults
-            vbm_results(path_to_spm8, rootpath, T1file, significance, i);
+            % Generate the results images
             close all;
-            spm('quit');
+            if ~skipresults
+                vbm_results(path_to_spm8, rootpath, T1file, significance, i);
+                close all;
+                spm('quit');
 
-            % Call Python script to generate final image
-            callPython(fullfile(prevfolder, 'vbm_gen_final_image.py'), ['"' rootpath '" "img_type' int2str(i) '_"'])
+                % Call Python script to generate final image
+                callPython(fullfile(prevfolder, 'vbm_gen_final_image.py'), ['"' rootpath '" "img_type' int2str(i) '_"'])
+            end
         end
     end %endfor each analysis (grey only or grey+white)
 
