@@ -7,19 +7,24 @@ function vbm_script_preproc_csg()
 %
 % You need to have installed the following libraries prior to launching this script:
 % * SPM8 + VBM8 (inside spm/toolbox folder)
-% Also you need to use a fully compatible MATLAB version with SPM8. It was successfully tested on Matlab2011a and Matlab2013a, but failed on Matlab2016a (even with the latest patch on github, which should make SPM8 compatible!).
-% You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) to generate the final stitched image, but if you want to do it yourself it is not needed.
+% Also you need to use a fully compatible MATLAB version with SPM8. It was successfully tested on Matlab2011a and Matlab2013a, but failed with MATLAB 2016a. However, it successfully worked with MATLAB 2018a by modifying spm_render.m lines 260-261, change:
+%    load('Split');
+%    colormap(split);
+% into:
+%    oldcmap = load('Split');
+%    colormap(oldcmap.split);
+% You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself it is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v0.5.4
+% v0.5.5
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
-% 2017-2018
+% 2017-2019
 % LICENSE: MIT
 %
-% Inspired from a pipeline from Mohamed Ali BAHRI.
+% Inspired from a pipeline by Mohamed Ali BAHRI.
 %
 % TODO:
-% * Nothing here!
+% * Update to CAT12 (based on fmri pipeline?)
 % -------------------------------------------------------------------------
 % =========================================================================
 clear all;

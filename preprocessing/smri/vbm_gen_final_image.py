@@ -1,6 +1,7 @@
 # coding: utf-8
-# VBM final image generator, by Stephen Karl Larroque, 2017-2018
-# v0.1.7
+# VBM final image generator, by Stephen Karl Larroque, 2017-2019
+# v0.1.8
+# Note that you need to install PILLOW (not PIL) for this script to work
 
 from __future__ import division
 import os, sys
@@ -57,7 +58,7 @@ im2_crop = im2.crop((0, int(im2.size[1]/2), im2.size[0], im2.size[1]))
 im2_col1 = im2_crop.crop((im2_crop.size[0]/8, 0, (im2_crop.size[0]/8) * 3, im2_crop.size[1]))
 im2_col2 = im2_crop.crop((im2_crop.size[0]/8 * 5, 0, (im2_crop.size[0]/8) * 7, im2_crop.size[1]))
 # Join them (they should be tighter now)
-im2_new = Image.new('RGB', (im2_col1.size[0] + im2_col2.size[0], max(im2_col1.size[1], im2_col2.size[1])))
+im2_new = Image.new('RGB', (int(im2_col1.size[0] + im2_col2.size[0]), int(max(im2_col1.size[1], im2_col2.size[1]))))
 im2_new.paste(im2_col1, (0, 0))
 im2_new.paste(im2_col2, (im2_col1.size[0], 0))
 
