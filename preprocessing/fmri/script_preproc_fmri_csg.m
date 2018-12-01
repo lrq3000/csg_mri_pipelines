@@ -575,8 +575,8 @@ if enable_rshrf
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.hrflen = 32;
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.thr = 1;
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.mdelay = [4 8];
-                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.cvi = 1;
-                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.fmri_t = 16;
+                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.cvi = 1; % Serial Correlation Auto Regression modelling
+                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.fmri_t = 1; % Microtime Resolution : Do NOT increase, else it will take an ENORMOUS amount of time (this will basically multiply the total time taken per session!)
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.fmri_t0 = 1;
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.Denoising.generic = {};
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.Denoising.bands = {[0.008 0.09]}; % use the same bandpass filtering as default in CONN

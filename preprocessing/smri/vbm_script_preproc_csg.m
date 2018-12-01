@@ -294,7 +294,7 @@ for t=1:length(T1fileslist)
         end
         prevfolder = cd();
         cd(jobsdir);
-        save(['jobs_singlecase_VBMDartel_analysis' int2str(i) '_' datestr(now,30)], 'matlabbatch']);
+        save(['jobs_singlecase_VBMDartel_analysis' int2str(i) '_' datestr(now,30)], 'matlabbatch');
         cd(prevfolder);
 
         % Run the preprocessing pipeline for current subject!
