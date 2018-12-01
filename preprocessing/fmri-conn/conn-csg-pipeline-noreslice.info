@@ -1,0 +1,1 @@
+Coma Science Group pipeline using indirect normalization, similar to the batch pipeline using SPM12 with unified segmentation mode, but using Realign (without Reslicing nor Unwarping so no interpolation of functional). For CONN 18a. By Stephen Karl Larroque, 2018. License: MIT.
