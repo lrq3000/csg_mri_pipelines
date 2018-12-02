@@ -29,7 +29,7 @@ function script_preproc_fmri_csg()
 % 2016-2018
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2018
-% v2.2.3b
+% v2.2.5b
 % License: MIT
 %
 % TODO:
@@ -575,7 +575,7 @@ if enable_rshrf
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.hrflen = 32;
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.thr = 1;
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.mdelay = [4 8];
-                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.cvi = 1; % Serial Correlation Auto Regression modelling
+                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.cvi = 0; % Serial Correlation Auto Regression modelling - if enabled (even just value 1), it makes the step "Deconvolving HRF" a lot longer
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.fmri_t = 1; % Microtime Resolution : Do NOT increase, else it will take an ENORMOUS amount of time (this will basically multiply the total time taken per session!)
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.HRFE.fmri_t0 = 1;
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.Denoising.generic = {};
