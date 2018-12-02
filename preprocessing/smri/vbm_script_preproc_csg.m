@@ -16,7 +16,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself it is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v0.5.5
+% v1.0.0b
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
@@ -35,10 +35,12 @@ rootpath_multi = 'X:\Path\To\MultipleSubjectsData'; % Set here the path to a dir
 rootpath_single = 'X:\Path\To\OneSubject\mprage\T1.nii'; % If you want to process only one subject, set here the full path to the T1 (extension: nii or img).
 controlspath_greyonly = 'X:\Path\To\VBM_Controls\'; % controls images, must be generated using the same template AND grey only. If you don't have these images, run this pipeline on a set of healthy volunteers' T1 images with skip2ndlevel set to 1. Also this path is useless if skip2ndlevel is set to 1.
 controlspath_greywhite = 'X:\Path\To\VBM_Controls_WhitePlusGrey\'; % controls images, grey + white, only necessary if you set skipgreypluswhite = 0. Skipped if skip2ndlevel = 1 or skipgreypluswhite = 1.
-path_to_spm8 = 'C:\matlab_tools\spm8';
-path_to_spm8_tissue_proba_map = 'C:\matlab_tools\spm8\toolbox\Seg\TPM.nii';
+path_to_spm = 'C:\matlab_tools\spm8'; % change to spm8 or spm12 path depending on what script_mode you choose
 path_to_vbm8 = 'C:\matlab_tools\spm8\toolbox\vbm8';
-path_to_mni_template = 'C:\matlab_tools\spm8\toolbox\vbm8\Template_1_IXI550_MNI152.nii'; % you can use the default VBM template or a custom one. But always input the 1st template out of the 6.
+path_to_spm12 = 'C:\matlab_tools\spm12';
+path_to_cat12 = 'C:\matlab_tools\spm12\toolbox\cat12';
+script_mode = 1; % 0: SPM8+VBM8, 1: SPM12+CAT12
+num_cores = 0; % number of cores to use for parallel calculation in CAT12: use 0 to disable. For VBM8, multi-threading is always enabled and the number of cores cannot be chosen.
 smoothsize = 12; % 12 for patients with damaged brains, 8 or 10 for healthy volunteers
 skip1stlevel = 0; % only do 2nd-level analysis, skip preprocessing (particularly useful to continue at 2nd level directly if a bug happened or you change parameters such as significance)
 skipcsfmask = 0; % do not apply a CSF exclusion mask in the results in SPM.mat
@@ -46,6 +48,15 @@ significance = 'fdr'; % 'fdr' by default, or 'unc'. Can skip1stlevel if you just
 skipgreypluswhite = 1; % skip grey+white matters analysis? (if true, then will do only grey matter analysis, if false then will do both) - grey+white is disadvised, it was an experimental approach that was dropped due to inconsistent results
 skip2ndlevel = 0; % if you only want to do VBM preprocessing but not compare against controls, set this to 1
 skipresults = 0; % if you do not want to generate the result images from the 2nd level results (requires skip2ndlevel set to 0)
+
+if script_mode == 0
+    path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii'; % relative to spm path
+    path_to_dartel_template = 'toolbox/vbm8/Template_1_IXI550_MNI152.nii'; % you can use the default VBM template or a custom one. But always input the 1st template out of the 6.
+elseif script_mode == 1
+    path_to_tissue_proba_map = 'tpm/TPM.nii';
+    path_to_dartel_template = 'toolbox/cat12/templates_1.50mm/Template_1_IXI555_MNI152.nii';
+    path_to_shooting_template = 'toolbox/cat12/templates_1.50mm/Template_0_IXI555_MNI152_GS.nii';
+end
 
 % --- Start of main script
 fprintf(1, '\n=== VBM PREPROCESSING AND ANALYSIS ===\n');
@@ -111,41 +122,115 @@ for t=1:length(T1fileslist)
         matlabbatch = [];
 
         % == Segmentation of patient
-        fprintf('Running 1st-level analysis (segmentation)');
+        fprintf('Running 1st-level analysis (segmentation) using VBM8/CAT12\n');
         moduleid = moduleid + 1;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.data = {strcat(fullfile(rootpath, T1file), ',1')};
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.tpm = {strcat(path_to_spm8_tissue_proba_map, ',1')};
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.ngaus = [2 2 2 3 4 2];
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.biasreg = 0.0001;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.biasfwhm = 60;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.affreg = 'mni';
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.warpreg = 4;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.samp = 1;  % MODIFIED from defaults: sampling distance = 1 is better than default 3 for patients in clinical setting, because we want to reduce approximations and information loss
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.dartelwarp.normhigh.darteltpm = {strcat(path_to_mni_template, ',1')};
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.sanlm = 2;  % sanlm 2 allow usage of multithreading to speedup the processing, but can set to 1 if issues happen (single thread)
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.mrf = 0.15;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.cleanup = 1;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.print = 1;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.GM.native = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.GM.warped = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.GM.modulated = 2;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.GM.dartel = 2;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.WM.native = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.WM.warped = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.WM.modulated = 2;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.WM.dartel = 2;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.CSF.native = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.CSF.warped = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.CSF.modulated = 2;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.CSF.dartel = 2;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.bias.native = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.bias.warped = 1;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.bias.affine = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.label.native = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.label.warped = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.label.dartel = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.jacobian.warped = 0;
-        matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.warps = [0 0];
+        if script_mode == 0
+            fprintf('Using VBM8\n');
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.data = {strcat(fullfile(rootpath, T1file), ',1')};
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.tpm = {strcat(fullfile(path_to_spm, path_to_tissue_proba_map), ',1')};
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.ngaus = [2 2 2 3 4 2];
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.biasreg = 0.0001;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.biasfwhm = 60;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.affreg = 'mni';
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.warpreg = 4;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.opts.samp = 1;  % MODIFIED from defaults: sampling distance = 1 is better than default 3 for patients in clinical setting, because we want to reduce approximations and information loss
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.dartelwarp.normhigh.darteltpm = {strcat(fullfile(path_to_spm, path_to_dartel_template), ',1')};
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.sanlm = 2;  % sanlm 2 allow usage of multithreading to speedup the processing, but can set to 1 if issues happen (single thread)
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.mrf = 0.15;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.cleanup = 1;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.extopts.print = 1;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.GM.native = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.GM.warped = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.GM.modulated = 2;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.GM.dartel = 2;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.WM.native = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.WM.warped = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.WM.modulated = 2;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.WM.dartel = 2;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.CSF.native = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.CSF.warped = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.CSF.modulated = 2;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.CSF.dartel = 2;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.bias.native = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.bias.warped = 1;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.bias.affine = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.label.native = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.label.warped = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.label.dartel = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.jacobian.warped = 0;
+            matlabbatch{moduleid}.spm.tools.vbm8.estwrite.output.warps = [0 0];
+        elseif script_mode == 1
+            fprintf('Using CAT12\n');
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.data = {strcat(fullfile(rootpath, T1file), ',1')};
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.nproc = num_cores; % NOTE: if using parallel computation, then no other module can run after CAT12 (as specified in the documentation), but here in this pipeline anyway we always create a new job for the other postprocessing steps
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.opts.tpm = {strcat(fullfile(path_to_spm, path_to_tissue_proba_map), ',1')};
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.opts.affreg = 'mni';
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.opts.biasstr = 0.5;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.opts.samp = 1; % MODIFIED from defaults: sampling distance = 1 is better than default 3 for patients in clinical setting, because we want to reduce approximations and information loss
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.opts.redspmres = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.APP = 2;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.NCstr = -Inf;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.LASstr = 0.5;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.gcutstr = 0.5;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.cleanupstr = 0.5;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.WMHC = 3;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.SLC = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.restypes.fixed = [1 0.1];
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.registration.darteltpm = {strcat(fullfile(path_to_spm, path_to_dartel_template), ',1')};
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.registration.shootingtpm = {strcat(fullfile(path_to_spm, path_to_shooting_template), ',1')};
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.registration.regstr = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.vox = 1.5;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.surface.pbtres = 0.5;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.surface.scale_cortex = 0.7;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.surface.add_parahipp = 0.1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.surface.close_parahipp = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.admin.ignoreErrors = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.admin.verb = 2;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.extopts.admin.print = 2;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.surface = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.neuromorphometrics = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.lpba40 = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.cobra = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.hammers = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.ibsr = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.aal = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.mori = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.anatomy = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.GM.native = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.GM.warped = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.GM.mod = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.GM.dartel = 3;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.WM.native = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.WM.warped = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.WM.mod = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.WM.dartel = 3;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.CSF.native = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.CSF.warped = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.CSF.mod = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.CSF.dartel = 3;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.WMH.native = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.WMH.warped = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.WMH.mod = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.WMH.dartel = 3;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.SL.native = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.SL.warped = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.SL.mod = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.SL.dartel = 0;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.atlas.native = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.atlas.dartel = 3;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.label.native = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.label.warped = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.label.dartel = 3;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.bias.native = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.bias.warped = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.bias.dartel = 3;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.las.native = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.las.warped = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.las.dartel = 3;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.jacobian.warped = 1;
+            matlabbatch{moduleid}.spm.tools.cat.estwrite.output.warps = [1 1];
+
+        end
         % Run the pipeline for current subject!
         spm_jobman('run', matlabbatch)
     end %endif
@@ -164,7 +249,11 @@ for t=1:length(T1fileslist)
         matlabbatch = [];
 
         % == Get segmented images
-        segimg = regex_files(rootpath, ['^m0wrp\d.+\.(img|nii)$']);
+        if script_mode == 0
+            segimg = regex_files(rootpath, ['^m0wrp\d.+\.(img|nii)$']);
+        elseif script_mode == 1
+            segimg = regex_files(fullfile(rootpath, 'mri'), ['^mwp\d.+\.(img|nii)$']);
+        end
 
         % == Extract controls images (for group comparison)
         % Note: do it first in csse there is an issue (ie: path incorrect, missing files)
@@ -190,7 +279,11 @@ for t=1:length(T1fileslist)
         % == Smoothing
         moduleid = moduleid + 1;
         if i == 2
-            matlabbatch{moduleid}.spm.spatial.smooth.data = {fullfile(rootpath, 'greywhite.img,1')};
+            if script_mode == 0
+                matlabbatch{moduleid}.spm.spatial.smooth.data = {fullfile(rootpath, 'greywhite.img,1')};
+            elseif script_mode == 1
+                matlabbatch{moduleid}.spm.spatial.smooth.data = {fullfile(rootpath, 'mri', 'greywhite.img,1')};
+            end
         else
             matlabbatch{moduleid}.spm.spatial.smooth.data = {segimg{1}};
         end %endif
