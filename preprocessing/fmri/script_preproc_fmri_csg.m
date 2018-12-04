@@ -29,7 +29,7 @@ function script_preproc_fmri_csg()
 % 2016-2018
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2018
-% v2.2.5b
+% v2.2.6b
 % License: MIT
 %
 % TODO:
@@ -81,7 +81,7 @@ smoothingkernel = 8;
 % Resize functional to 3x3x3 before smoothing
 resizeto3 = false;
 % Parallel preprocessing?
-parallel_processing = false;
+parallel_processing = true;
 % ART input files
 art_before_smoothing = false; % At CSG, we always did ART on post-smoothed data, but according to Alfonso Nieto-Castanon, ART should be done before smoothing: https://www.nitrc.org/forum/message.php?msg_id=10652
 % Skip preprocessing steps (to do only post-processing?) - useful in case
@@ -586,6 +586,10 @@ if enable_rshrf
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.mask = {''};
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.outdir = {''};
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.prefix = 'deconv_';
+
+                % Saving temporary batch (allow to introspect later on in case of issues)
+                save_batch(fullfile(root_pth, 'JOBS'), matlabbatch, 'rshrf', script_mode, data(isub).name, isess);
+
                 spm_jobman('run', matlabbatch);
             end %end for sessions
         end % end for subjects
@@ -627,7 +631,7 @@ for c = 1:length(conditions)
             smoothingbatchall{matlabbatchall_counter}{1}.spm.spatial.smooth.im = 0;
             smoothingbatchall{matlabbatchall_counter}{1}.spm.spatial.smooth.prefix = ['s' int2str(smoothingkernel)];
             % Saving temporary batch (allow to introspect later on in case of issues)
-            save_batch(fullfile(root_pth, 'JOBS'), smoothingbatchall{matlabbatchall_counter}, 'smoothing', script_mode, data(isub).name);
+            save_batch(fullfile(root_pth, 'JOBS'), smoothingbatchall{matlabbatchall_counter}, 'smoothing', script_mode, data(isub).name, isess);
             % -------------------------------------------------------------
 
             %ART TOOLBOX FOR MOTION ARTIFACT REMOVAL
@@ -712,7 +716,7 @@ for c = 1:length(conditions)
                 artbatchall{matlabbatchall_counter}{3}.spm.stats.fmri_spec.cvi = 'AR(1)';
 
                 % Saving temporary batch (allow to introspect later on in case of issues)
-                save_batch(fullfile(root_pth, 'JOBS'), artbatchall{matlabbatchall_counter}, 'spmgenart', script_mode, data(isub).name);
+                save_batch(fullfile(root_pth, 'JOBS'), artbatchall{matlabbatchall_counter}, 'spmgenart', script_mode, data(isub).name, isess);
 
                 %spm('defaults', 'FMRI');
                 %fclose('all');
@@ -937,14 +941,18 @@ function run_jobs(matlabbatchall, parallel_processing, matlabbatchall_infos)
     end
 end %endfunction
 
-function save_batch(jobsdir, matlabbatch, jobname, script_mode, subjname)
+function save_batch(jobsdir, matlabbatch, jobname, script_mode, subjname, isess)
 % Save a batch as a .mat file in the specified jobsdir folder
     if ~exist(jobsdir)
         mkdir(jobsdir)
     end
     prevfolder = cd();
     cd(jobsdir);
-    save(['jobs_' jobname '_mode' int2str(script_mode) '_' subjname '_' datestr(now,30)], 'matlabbatch')
+    if ~exist('isess', 'var')
+        save(['jobs_' jobname '_mode' int2str(script_mode) '_' subjname '_' datestr(now,30)], 'matlabbatch')
+    else
+        save(['jobs_' jobname '_mode' int2str(script_mode) '_' subjname '_session' int2str(isess) '_' datestr(now,30)], 'matlabbatch')
+    end
     cd(prevfolder);
 end %endfunction
 
