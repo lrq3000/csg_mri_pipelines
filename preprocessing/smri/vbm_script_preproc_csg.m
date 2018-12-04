@@ -17,7 +17,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself it is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.2.2b
+% v1.2.3b
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
@@ -52,7 +52,7 @@ parallel_processing = true; % enable parallel processing between multiple subjec
 
 if script_mode == 0
     path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii'; % relative to spm path
-    path_to_dartel_template = 'toolbox/vbm8/Template_1_IXI550_MNI152.nii'; % you can use the default VBM template or a custom one. But always input the 1st template out of the 6.
+    path_to_dartel_template = 'Template_1_IXI550_MNI152.nii'; % you can use the default VBM template or a custom one. But always input the 1st template out of the 6.
 elseif script_mode == 1
     path_to_tissue_proba_map = 'tpm/TPM.nii';
     path_to_dartel_template = 'templates_1.50mm/Template_1_IXI555_MNI152.nii';
