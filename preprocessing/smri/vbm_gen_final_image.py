@@ -38,9 +38,10 @@ contrast = 1.5
 
 # Get arguments
 if len(sys.argv) < 0:
-    raise ValueError('Not enough arguments supplied: need to specify 2 arguments: the rootpath of the images and the images prefix')
+    raise ValueError('Not enough arguments supplied: need to specify 3 arguments: 1- the rootpath of the images, 2- the images prefix, 3- the script mode (0 or 1)')
 impath = sys.argv[1]
 imprefix = sys.argv[2]
+script_mode = int(sys.argv[3])
 
 # Loading images
 im1 = Image.open(os.path.join(impath, imprefix+"1.png"))
@@ -63,9 +64,14 @@ im2_new.paste(im2_col1, (0, 0))
 im2_new.paste(im2_col2, (im2_col1.size[0], 0))
 
 # == Images 3 and 4: patient's unnormalized T1 and age-sex-matched control
-im3_crop = im3.crop((0, 0, im3.size[0], int(im3.size[1]/5*2.7)))
+if script_mode == 0:
+    im3offset = 2.7
+    im4offset = 2.8
+elif script_mode == 1:
+    im3offset = im4offset = 3.
+im3_crop = im3.crop((0, 0, im3.size[0], int(im3.size[1]/5*im3offset)))
 im3_trimmed = trim(im3_crop)
-im4_crop = im4.crop((0, 0, im4.size[0], int(im4.size[1]/5*2.8)))
+im4_crop = im4.crop((0, 0, im4.size[0], int(im4.size[1]/5*im4offset)))
 im4_trimmed = trim(im4_crop)
 # Raise brightness
 im3_enhancer_b = ImageEnhance.Brightness(im3_trimmed)

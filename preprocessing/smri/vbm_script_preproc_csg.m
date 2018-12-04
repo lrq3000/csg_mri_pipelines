@@ -17,7 +17,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself it is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.1.0b
+% v1.2.0b
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
@@ -36,7 +36,7 @@ rootpath_multi = 'X:\Path\To\MultipleSubjectsData'; % Set here the path to a dir
 rootpath_single = 'X:\Path\To\OneSubject\mprage\T1.nii'; % If you want to process only one subject, set here the full path to the T1 (extension: nii or img).
 controlspath_greyonly = 'X:\Path\To\VBM_Controls\'; % controls images, must be generated using the same template AND grey only. If you don't have these images, run this pipeline on a set of healthy volunteers' T1 images with skip2ndlevel set to 1. Also this path is useless if skip2ndlevel is set to 1.
 controlspath_greywhite = 'X:\Path\To\VBM_Controls_WhitePlusGrey\'; % controls images, grey + white, only necessary if you set skipgreypluswhite = 0. Skipped if skip2ndlevel = 1 or skipgreypluswhite = 1.
-path_to_spm = 'C:\matlab_tools\spm12'; % change to spm8 or spm12 path depending on what script_mode you choose (respectively spm8 for script_mode 0 or spm12 for script_mode 1)
+path_to_spm = 'C:\matlab_tools\spm12_fdr'; % change to spm8 or spm12 path depending on what script_mode you choose (respectively spm8 for script_mode 0 or spm12 for script_mode 1)
 path_to_vbm8 = 'C:\matlab_tools\spm8\toolbox\vbm8'; % only necessary if script_mode == 0
 path_to_cat12 = 'C:\matlab_tools\spm12\toolbox\cat12'; % only necessary if script_mode == 1
 script_mode = 1; % 0: SPM8+VBM8, 1: SPM12+CAT12
@@ -456,12 +456,19 @@ for t=1:length(T1fileslist)
             % Generate the results images
             close all;
             if ~skipresults
-                vbm_results(path_to_spm8, rootpath, T1file, significance, i);
+                fprintf('== Generate final results report ==\n');
+                if script_mode == 0
+                    normprefix = 'wmr';
+                elseif script_mode == 1
+                    normprefix = 'wm';
+                end
+                vbm_results(path_to_spm, rootpath, T1fileslist{t}, significance, normprefix, i);
                 close all;
                 spm('quit');
 
                 % Call Python script to generate final image
-                callPython(fullfile(prevfolder, 'vbm_gen_final_image.py'), ['"' rootpath '" "img_type' int2str(i) '_"'])
+                fprintf('Generating final image using Python...\n');
+                callPython(fullfile('vbm_gen_final_image.py'), ['"' rootpath '" "img_type' int2str(i) '_"'])
             end
         end
     end %endfor each analysis (grey only or grey+white)

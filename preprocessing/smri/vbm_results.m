@@ -1,15 +1,20 @@
-function vbm_results(path_to_spm, rootpath, T1file, significance, id)
+function vbm_results(path_to_spm, rootpath, T1file, significance, normprefix, id)
 % vbm_results(path_to_spm, rootpath, T1file, significance)
 % Automagically print VBM analysis results onto png images.
 % Significance is either unc or fdr
 % Tested on SPM12 and SPM8
 % STEPHEN KARL LARROQUE
-% v0.1.5
-% 2017-2018
+% v0.2.0
+% 2017-2019
 % LICENSE: MIT
 
-% Analysis id (just for filename)
-if isempty(id)
+% T1 normalized prefix
+if ~exist('normprefix', 'var')
+    normprefix = 'wm';
+end
+
+% Analysis id (just for filename, to generate multiple results for the same scan)
+if ~exist('id', 'var')
     id = 0;
 end
 
@@ -47,7 +52,7 @@ spm('defaults', 'FMRI')
 [hReg, xSPM, SPM] = spm_results_ui('setup', job);
 
 % Section visu
-spm_sections(xSPM,hReg,fullfile(rootpath, ['wmr' T1name '.nii']));
+spm_sections(xSPM,hReg,fullfile(rootpath, [normprefix T1name '.nii']));
 spmfigprint(fullfile(rootpath, [imprefix '1.png']), 'png', 'white');
 
 % Rendered 3D brains visu
@@ -67,8 +72,8 @@ spmfigprint(fullfile(rootpath, [imprefix '2.png']), 'png', 'white');
 %spm_print('im2.png'); % Works but only in eps
 
 % Display patient's unnormalized brain
-spm_image('init', fullfile(rootpath, T1file));
-spm_image('display', fullfile(rootpath, T1file));
+spm_image('init', T1file);
+spm_image('display', T1file);
 spm_orthviews('Xhairs','off');
 spmfigprint(fullfile(rootpath, [imprefix '3.png']), 'png', 'black');
 
