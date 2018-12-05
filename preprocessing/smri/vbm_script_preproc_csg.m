@@ -17,7 +17,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself it is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.2.3b
+% v1.2.4
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
@@ -468,7 +468,8 @@ for t=1:length(T1fileslist)
 
                 % Call Python script to generate final image
                 fprintf('Generating final image using Python...\n');
-                callPython(fullfile('vbm_gen_final_image.py'), ['"' rootpath '" "img_type' int2str(i) '_"'])
+                imprefix = ['img_type' int2str(i) '_'];
+                callPython(fullfile('vbm_gen_final_image.py'), ['"' rootpath '" "' imprefix '" "' int2str(script_mode) '"'])
             end
         end
     end %endfor each analysis (grey only or grey+white)
