@@ -29,7 +29,7 @@ function script_preproc_fmri_csg()
 % 2016-2018
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2018
-% v2.2.8b
+% v2.2.9
 % License: MIT
 %
 % TODO:
@@ -87,7 +87,7 @@ art_before_smoothing = false; % At CSG, we always did ART on post-smoothed data,
 % Skip preprocessing steps (to do only post-processing?) - useful in case
 % of error and you want to restart just at post-processing
 skip_preprocessing = false;
-% Use the rshrf toolbox to deconvolve the Hemodynamic Response Function?  Note: the rshrf toolbox needs to be in the "toolbox" folder of SPM12
+% Use the rshrf toolbox to deconvolve the Hemodynamic Response Function?  Note: the rshrf toolbox needs to be in the "toolbox" folder of SPM12. Important: do not enable this if you use CONN for analysis, as it is advised to use rshrf after CONN denoising: https://www.nitrc.org/forum/forum.php?thread_id=9818&forum_id=1144
 enable_rshrf = false;
 % Use Realign & Unwarp (=non-linear deformation recovery from movement artifacts) instead of Realign (without Reslice)? Note: available only for SPM12 pipelines.
 realignunwarp = false;
@@ -582,8 +582,8 @@ if enable_rshrf
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.Denoising.bands = {[0.008 0.09]}; % use the same bandpass filtering as default in CONN
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.Denoising.Detrend = 0;
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.Denoising.Despiking = 0;
-                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.rmoutlier = 1;
-                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.mask = {''};
+                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.rmoutlier = 0;
+                matlabbatch{1}.spm.tools.HRF.vox_rsHRF.mask = {fullfile(spm('Dir'),'tpm','mask_ICV.nii')}; % IMPORTANT: use a mask to avoid too long calculations (which can take days instead of seconds/minutes normally! See https://github.com/compneuro-da/rsHRF/issues/51)
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.outdir = {''};
                 matlabbatch{1}.spm.tools.HRF.vox_rsHRF.prefix = 'deconv_';
 
