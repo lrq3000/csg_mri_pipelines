@@ -1,7 +1,7 @@
 # Coma Science Group MRI pipelines
 MRI preprocessing and analysis pipelines and tools for the study of disorders of consciousness.
 
-This includes pipelines for fMRI BOLD EPI (using SPM and CONN) and for DWI (using MRTRIX3 and FSL).
+This includes pipelines for fMRI BOLD EPI (using SPM and CONN and optionally CAT12 and rshrf), for DWI tractography (using MRTRIX3 and FSL) and structural voxel-based morphometry using VBM8 or CAT12.
 
 All tools are either in MATLAB or Python.
 
