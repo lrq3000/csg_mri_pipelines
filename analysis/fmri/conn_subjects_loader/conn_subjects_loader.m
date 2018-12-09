@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h, conn16b, conn17f and conn18a on data preprocessed with VBM8, CAT12, SPM12 OldSeg and with raw data not preprocessed (in this case, set loading_mode to 0)
-% v1.0.2
+% v1.0.3
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016-2019 Stephen Karl Larroque
@@ -45,7 +45,7 @@ function conn_subjects_loader()
 
 % ------ PARAMETERS HERE
 TR = 2.46;  % can also input a vector if your subjects have different TR, eg: [ 2.0 2.15*ones(1, 14) 2.15*ones(1, 13) ]
-conn_file = fullfile(pwd, 'conn_project_ket_new17.mat');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
+conn_file = fullfile(pwd, 'conn_project_1.mat');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
 conn_ver = 18; % Put here the CONN version you use (just the number, not the letter)
 root_path = 'X:\Path\To\Data';
 path_to_spm = 'C:\matlab_tools\spm12';
@@ -54,8 +54,8 @@ path_to_roi_maps = ''; % Path to your ROIs maps, extracted by MarsBars or whatev
 loading_mode = 0; % loading mode: raw files (0) or already preprocessed (1)? If 0 (raw files), the prefixes below won't be used
 func_smoothed_prefix = 's8wra'; % prefix of the functional images you want to use (generally the smoothed motion corrected functional images). Use: s8rwa for VBM8, s8wra for SPM12 OldSeg, s8wra for CAT12.
 roiextract_type = 1; % extract ROI from what kind of functional images? 1: smoothed images (same files as for the rest of the analysis) ; 2: raw images by stripping the SPM smoothing prefix 's' ; 3: raw images by stripping the smoothing prefix specified above ; 4: other files (NOT SUPPORTED in this script yet). Why use 2 or 3? From CONN's manual, it is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
-struct_norm_prefix = 'wm'; % prefix for the (MNI) normalized structural image. Use: wmr for VBM8, wm for SPM12 OldSeg, wp0 for CAT12.
-struct_segmented_grey_prefix = 'wc1'; % prefix for segmented structural grey matter. Use: m0wrp1 for VBM8, wc1 for SPM12 OldSeg, mwp1 for CAT12.
+struct_norm_prefix = 'wm'; % prefix for the (MNI) normalized structural image. Use: wmr for VBM8, wm for SPM12 OldSeg, wm (non-segmented) or wp0 (segmented) for CAT12.
+struct_segmented_grey_prefix = 'wc1'; % prefix for segmented structural grey matter. Use: m0wrp1 for VBM8, wc1 for SPM12 OldSeg, wp1 (non-modulated) or mwp1 (modulated) for CAT12.
 struct_segmented_white_prefix = 'wc2'; % idem for white matter. Use wc2 for SPM12 OldSeg.
 struct_segmented_csf_prefix = 'wc3'; % idem for csf. Use wc3 for SPM12 OldSeg.
 nb_first_volumes_to_remove = 0; % NOT READY, DO NOT USE! % number of functional volumes to remove, to reduce the fMRI coil calibration bias at the start of the acquisition (ie, the fMRI scanner needs an exponentially decreasing time to calibrate at the beginning, generally 3-4 volumes). Set 0 to disable. NOTE: works only with multi-files nifti *.img/*.hdr (NOT with 4D nifti yet!).
@@ -189,7 +189,7 @@ for g=1:length(groups)
                 session.files.roi.csf = check_exist(regex_files(structpath, ['^' struct_segmented_csf_prefix '.+\.(img|nii)$']));
                 % Covariates 1st-level
                 % ART movement artifacts correction
-                session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_*(' func_smoothed_prefix '.+)?\.mat$']));
+                session.files.covars1.movement = check_exist(regex_files(funcmotpath, ['^art_regression_outliers_and_movement_*.+)?\.mat$']));
             end
 
             % Remove first x functional volumes (to avoid fMRI coil gradient calibration bias)
