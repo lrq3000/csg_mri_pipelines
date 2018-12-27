@@ -4,7 +4,7 @@ function vbm_results(path_to_spm, rootpath, T1file, significance, normprefix, id
 % Significance is either unc or fdr
 % Tested on SPM12 and SPM8
 % STEPHEN KARL LARROQUE
-% v0.2.0
+% v0.2.1
 % 2017-2019
 % LICENSE: MIT
 
@@ -74,7 +74,8 @@ spmfigprint(fullfile(rootpath, [imprefix '2.png']), 'png', 'white');
 % Display patient's unnormalized brain
 spm_image('init', T1file);
 spm_image('display', T1file);
-spm_orthviews('Xhairs','off');
+spm_orthviews('Xhairs','off'); % hide crosshairs
+spm_orthviews('Reposition', [0, 0, 0]); % reposition to origin ([0 0 0] in mm space)
 spmfigprint(fullfile(rootpath, [imprefix '3.png']), 'png', 'black');
 
 % Display a gender and age matched control's brain

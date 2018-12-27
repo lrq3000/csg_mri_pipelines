@@ -17,7 +17,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself it is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.2.4
+% v1.2.5
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
