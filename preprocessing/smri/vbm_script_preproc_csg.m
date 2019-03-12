@@ -6,7 +6,8 @@ function vbm_script_preproc_csg()
 % VBM with DARTEL preprocessing will be done and also 2nd-level analysis SPM.mat of one patient/subject against a group of controls. A picture of the results using the voxel-wise thresholding of your choice can be generated for each subject.
 %
 % You need to have installed the following libraries prior to launching this script:
-% * SPM8 + VBM8 (inside spm/toolbox folder) OR SPM12 + CAT12 (inside spm/toolbox folder)
+% * SPM8 + VBM8 (inside spm/toolbox folder) OR SPM12 + CAT12 (Geodesic Shooting, not DARTEL, r1434 | gaser | 2019-02-28 11:31:30) (inside spm/toolbox folder)
+% Note: please enable expertgui (set to 1) in cat_defaults.m to see all the options used here.
 %
 % Also you need to use a fully compatible MATLAB version with SPM8. It was successfully tested on Matlab2011a and Matlab2013a, but failed with MATLAB 2016a. However, it successfully worked with MATLAB 2018a by modifying spm_render.m lines 260-261, change:
 %    load('Split');
@@ -17,7 +18,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself it is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.2.5
+% v1.3.0
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
@@ -38,8 +39,8 @@ controlspath_greyonly = 'X:\Path\To\VBM_Controls\'; % controls images, must be g
 controlspath_greywhite = 'X:\Path\To\VBM_Controls_WhitePlusGrey\'; % controls images, grey + white, only necessary if you set skipgreypluswhite = 0. Skipped if skip2ndlevel = 1 or skipgreypluswhite = 1.
 path_to_spm = 'C:\matlab_tools\spm12_fdr'; % change to spm8 or spm12 path depending on what script_mode you choose (respectively spm8 for script_mode 0 or spm12 for script_mode 1)
 path_to_vbm8 = 'C:\matlab_tools\spm8\toolbox\vbm8'; % only necessary if script_mode == 0
-path_to_cat12 = 'C:\matlab_tools\spm12\toolbox\cat12'; % only necessary if script_mode == 1
-script_mode = 1; % 0: SPM8+VBM8, 1: SPM12+CAT12
+path_to_cat12 = 'C:\matlab_tools\spm12_fdr\toolbox\cat12'; % only necessary if script_mode == 1
+script_mode = 1; % 0: SPM8+VBM8(DARTEL), 1: SPM12+CAT12(SHOOT, successor of DARTEL), ref: https://www.researchgate.net/post/MR_brain_volume_spatial_normalization
 num_cores = 0; % number of cores to use for parallel calculation in CAT12: use 0 to disable. For VBM8, multi-threading is always enabled and the number of cores cannot be chosen.
 smoothsize = 12; % 12 for patients with damaged brains, 8 or 10 for healthy volunteers
 skip1stlevel = 0; % only do 2nd-level analysis, skip preprocessing (particularly useful to continue at 2nd level directly if a bug happened or you change parameters such as significance)
@@ -48,15 +49,16 @@ significance = 'fdr'; % 'fdr' by default, or 'unc'. Can skip1stlevel if you just
 skipgreypluswhite = 1; % skip grey+white matters analysis? (if true, then will do only grey matter analysis, if false then will do both) - grey+white is disadvised, it was an experimental approach that was dropped due to inconsistent results
 skip2ndlevel = 0; % if you only want to do VBM preprocessing but not compare against controls, set this to 1
 skipresults = 0; % if you do not want to generate the result images from the 2nd level results (requires skip2ndlevel set to 0)
-parallel_processing = true; % enable parallel processing between multiple subjects (num_cores need to be set to 0 to disable parallel processing inside CAT12, so we can parallelize outside!)
+parallel_processing = false; % enable parallel processing between multiple subjects (num_cores need to be set to 0 to disable parallel processing inside CAT12, so we can parallelize outside!)
+ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization
 
 if script_mode == 0
     path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii'; % relative to spm path
-    path_to_dartel_template = 'Template_1_IXI550_MNI152.nii'; % you can use the default VBM template or a custom one. But always input the 1st template out of the 6.
+    path_to_dartel_template = 'Template_1_IXI550_MNI152.nii'; % relative to vbm8 path, you can use the default VBM template or a custom one. But always input the 1st template out of the 6.
 elseif script_mode == 1
     path_to_tissue_proba_map = 'tpm/TPM.nii';
-    path_to_dartel_template = 'templates_1.50mm/Template_1_IXI555_MNI152.nii';
-    path_to_shooting_template = 'templates_1.50mm/Template_0_IXI555_MNI152_GS.nii';
+    %path_to_dartel_template = 'templates_1.50mm/Template_1_IXI555_MNI152.nii';
+    path_to_shooting_template = 'templates_1.50mm/Template_0_IXI555_MNI152_GS.nii'; % relative to cat12 path
 end
 
 if parallel_processing
@@ -187,28 +189,28 @@ if ~skip1stlevel
             fprintf('Using CAT12\n');
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.data = {strcat(fullfile(rootpath, T1file), ',1')};
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.nproc = num_cores; % NOTE: if using parallel computation, then no other module can run after CAT12 (as specified in the documentation), but here in this pipeline anyway we always create a new job for the other postprocessing steps
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.tpm = {strcat(fullfile(path_to_spm, path_to_tissue_proba_map), ',1')};
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.affreg = 'mni';
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.tpm = {fullfile(path_to_spm, path_to_tissue_proba_map)};
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.affreg = ethnictemplate;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.biasstr = 0.5;
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.samp = 1; % MODIFIED from defaults: sampling distance = 1 is better than default 3 for patients in clinical setting, because we want to reduce approximations and information loss
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.redspmres = 0;
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.APP = 2;
+            %matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.samp = 1; % WAS DELETED BY NEWER CAT12, MODIFIED from defaults: sampling distance = 1 is better than default 3 for patients in clinical setting, because we want to reduce approximations and information loss
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.accstr = 0.5;
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.APP = 2; % Affine Preprocessing set to full
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.NCstr = -Inf;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.LASstr = 0.5;
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.gcutstr = 0.5;
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.gcutstr = 2;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.cleanupstr = 0.5;
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.WMHC = 3;
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.WMHC = 3; % WMH as its own class (so we can have the WMHC nifti image output, and it also means that WMHC is then separated from other tissues and thus less bias when doing statistical comparisons)
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.SLC = 0;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.restypes.fixed = [1 0.1];
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.registration.darteltpm = {strcat(fullfile(path_to_cat12, path_to_dartel_template), ',1')};
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.registration.shootingtpm = {strcat(fullfile(path_to_cat12, path_to_shooting_template), ',1')};
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.registration.regstr = 0;
+            %matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {strcat(fullfile(path_to_cat12, path_to_dartel_template), ',1')};
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {fullfile(path_to_cat12, path_to_shooting_template)};
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = 0.5;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.vox = 1.5;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.surface.pbtres = 0.5;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.surface.scale_cortex = 0.7;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.surface.add_parahipp = 0.1;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.surface.close_parahipp = 0;
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.admin.ignoreErrors = 0;
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.admin.ignoreErrors = 1;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.admin.verb = 2;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.admin.print = 2;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.surface = 0;
@@ -217,7 +219,7 @@ if ~skip1stlevel
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.cobra = 0;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.hammers = 0;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.ibsr = 0;
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.aal = 0;
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.aal = 1;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.mori = 0;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.ROImenu.atlases.anatomy = 0;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.GM.native = 1;
@@ -251,7 +253,7 @@ if ~skip1stlevel
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.las.native = 1;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.las.warped = 1;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.las.dartel = 3;
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.jacobian.warped = 1;
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.jacobianwarped = 1;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.output.warps = [1 1];
         end
         % Save the batch for later introspection in case of issues
