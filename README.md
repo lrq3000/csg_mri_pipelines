@@ -9,6 +9,8 @@ All tools are licensed under MIT (but not necessarily the required/optional libr
 
 The rest of this document will describe some of the tool's purpose, usage and linked libraries. More documentation will be written in the future (maybe). In any case, literate programming is extensively used, so that you can expect lots of comments inside the scripts itself, so that they should be useable without any external documentation.
 
+The directory "external" contains external packages to ease reproducibility of our scripts by providing the exact same revisions of the packages we used.
+
 ## pathmatcher: Regular Expression Path Matcher
 
 ### Description
@@ -21,7 +23,7 @@ If you happen to know this situation, this tool might help you: just specify a r
 
 This application can also be used as a Python module, so that you can include it in a pipeline to (semi-)automate repetitive stuff, like selecting the appropriate files to open in your favorite tool like SPM. For an exemple, see the script `reorient_pipeline` at the root of this repository.
 
-Runs on Python 2.7.11, but uses good standards to ensure easy conversion to Python 3 in case you really need it.
+Runs on Python 2.7.15, but uses good standards to ensure easy conversion to Python 3 in case you really need it.
 
 If you are not experienced with [regular expressions](http://regexone.com/), you can use online tools such as [Pythex](http://pythex.org/) to instantly test your regexp.
 

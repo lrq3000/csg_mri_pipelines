@@ -6,8 +6,12 @@ function vbm_script_preproc_csg()
 % VBM with DARTEL preprocessing will be done and also 2nd-level analysis SPM.mat of one patient/subject against a group of controls. A picture of the results using the voxel-wise thresholding of your choice can be generated for each subject.
 %
 % You need to have installed the following libraries prior to launching this script:
-% * SPM8 + VBM8 (inside spm/toolbox folder) OR SPM12 + CAT12 (Geodesic Shooting, not DARTEL, r1434 | gaser | 2019-02-28 11:31:30) (inside spm/toolbox folder)
+% * SPM8 + VBM8 (inside spm/toolbox folder) OR SPM12 + CAT12 (Geodesic Shooting, not DARTEL) (with cat12 inside spm/toolbox folder)
 % Note: please enable expertgui (set to 1) in cat_defaults.m to see all the options used here.
+%
+% Exact versioning:
+% * SPM12 Version 7487 (SPM12) 14-Nov-18 (from spm/Contents.m or by typing [a, b] = spm('Ver))
+% * CAT12 r1434 | gaser | 2019-02-28 11:31:30 (from cat12/CHANGES.txt)
 %
 % Also you need to use a fully compatible MATLAB version with SPM8. It was successfully tested on Matlab2011a and Matlab2013a, but failed with MATLAB 2016a. However, it successfully worked with MATLAB 2018a by modifying spm_render.m lines 260-261, change:
 %    load('Split');
@@ -18,7 +22,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself it is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.3.0
+% v1.3.1
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
