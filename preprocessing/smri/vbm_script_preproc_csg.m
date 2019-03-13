@@ -12,17 +12,19 @@ function vbm_script_preproc_csg()
 % Exact versioning:
 % * SPM12 Version 7487 (SPM12) 14-Nov-18 (from spm/Contents.m or by typing [a, b] = spm('Ver))
 % * CAT12 r1434 | gaser | 2019-02-28 11:31:30 (from cat12/CHANGES.txt)
+% * SPM8 Version 6313
+% * VBM8 r445 | gaser | 2015-12-17 14:26:55 (from vbm8/CHANGES.txt)
 %
-% Also you need to use a fully compatible MATLAB version with SPM8. It was successfully tested on Matlab2011a and Matlab2013a, but failed with MATLAB 2016a. However, it successfully worked with MATLAB 2018a by modifying spm_render.m lines 260-261, change:
+% Also you need to use a fully compatible MATLAB version with SPM8. It was successfully tested on Matlab2011a and Matlab2013a, but failed with MATLAB 2016a and above. However, it successfully worked with MATLAB 2018a by modifying spm_render.m lines 260-261, by changing:
 %    load('Split');
 %    colormap(split);
 % into:
 %    oldcmap = load('Split');
 %    colormap(oldcmap.split);
-% You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself it is not needed.
+% You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself Python is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.3.1
+% v1.3.3
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
@@ -54,7 +56,8 @@ skipgreypluswhite = 1; % skip grey+white matters analysis? (if true, then will d
 skip2ndlevel = 0; % if you only want to do VBM preprocessing but not compare against controls, set this to 1
 skipresults = 0; % if you do not want to generate the result images from the 2nd level results (requires skip2ndlevel set to 0)
 parallel_processing = false; % enable parallel processing between multiple subjects (num_cores need to be set to 0 to disable parallel processing inside CAT12, so we can parallelize outside!)
-ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization
+ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization, 'subj' for the average of subjects (might be incompatible with CAT12 as it is not offered on the GUI)
+cat12_spm_preproc_accuracy = 0.75; % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12). Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases).
 
 if script_mode == 0
     path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii'; % relative to spm path
@@ -161,7 +164,7 @@ if ~skip1stlevel
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.vbm8.estwrite.opts.ngaus = [2 2 2 3 4 2];
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.vbm8.estwrite.opts.biasreg = 0.0001;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.vbm8.estwrite.opts.biasfwhm = 60;
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.vbm8.estwrite.opts.affreg = 'mni';
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.vbm8.estwrite.opts.affreg = ethnictemplate;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.vbm8.estwrite.opts.warpreg = 4;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.vbm8.estwrite.opts.samp = 1;  % MODIFIED from defaults: sampling distance = 1 is better than default 3 for patients in clinical setting, because we want to reduce approximations and information loss
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.vbm8.estwrite.extopts.dartelwarp.normhigh.darteltpm = {strcat(fullfile(path_to_vbm8, path_to_dartel_template), ',1')};
@@ -197,7 +200,7 @@ if ~skip1stlevel
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.affreg = ethnictemplate;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.biasstr = 0.5;
             %matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.samp = 1; % WAS DELETED BY NEWER CAT12, MODIFIED from defaults: sampling distance = 1 is better than default 3 for patients in clinical setting, because we want to reduce approximations and information loss
-            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.accstr = 0.5;
+            matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.opts.accstr = cat12_spm_preproc_accuracy;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.APP = 2; % Affine Preprocessing set to full
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.NCstr = -Inf;
             matlabbatchall{matlabbatchall_counter}{moduleid}.spm.tools.cat.estwrite.extopts.segmentation.LASstr = 0.5;

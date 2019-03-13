@@ -22,14 +22,14 @@ function script_preproc_fmri_csg()
 %
 % You need to have installed the following libraries prior to launching this script:
 % * ART
-% * SPM8 + VBM8 (inside spm/toolbox folder) OR SPM12 native (for OldSeg or Unified Segmentation pipelines) OR SPM12 + CAT12 (inside spm/toolbox folder)
+% * SPM8 (r6313) + VBM8 (r445, inside spm/toolbox folder) OR SPM12 native (r7487, for OldSeg or Unified Segmentation pipelines) OR SPM12 (r7487) + CAT12 (r1434, inside spm/toolbox folder)
 % * (optional) RSHRF toolbox if you want to deconvolve the haemodynamic response function (set enable_rshrf to true)
 %
 % Stephen Karl Larroque
 % 2016-2018
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
-% Last update 2018
-% v2.2.9
+% Last update 2019
+% v2.3.0
 % License: MIT
 %
 % TODO:
@@ -49,7 +49,7 @@ clear classes;
 % Motion correction uses scan-to-scan motion to determine outliers using composite measures (ART toolbox by Susan Gabrieli-Whitfield)
 nslices = 0; % set to 0 for autodetect
 TR = 0; % set to 0 for autodetect
-script_mode = 1; % 0: use VBM8 + SPM8 (slow); 1: use SPM12 with OldSeg only (fast); 2: use SPM12 + CAT12 (slowest); 3: use SPM12 with Unified Segmentation (fast).
+script_mode = 1; % 0: use VBM8 + SPM8/DARTEL (slow); 1: use SPM12 with OldSeg only (fast); 2: use SPM12 + CAT12/SHOOT (slowest); 3: use SPM12 with Unified Segmentation (fast).
 motionRemovalTool = 'art';
 root_pth = 'X:\Path\To\Data'; % root path, where all the subjects data is
 path_to_spm = 'C:\matlab_tools\spm12'; % change here if you use SPM8 + VBM8 pipeline
@@ -91,42 +91,46 @@ skip_preprocessing = false;
 enable_rshrf = false;
 % Use Realign & Unwarp (=non-linear deformation recovery from movement artifacts) instead of Realign (without Reslice)? Note: available only for SPM12 pipelines.
 realignunwarp = false;
+% Ethnic regularization
+ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization, 'subj' for the average of subjects (might be incompatible with CAT12 as it is not offered on the GUI)
+% SPM preprocessing accuracy, only if script_mode == 1 (using CAT12)
+cat12_spm_preproc_accuracy = 0.75; % Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases).
 
 % DO NOT TOUCH (unless you use a newer version than SPM12 or if the batch files were renamed)
 if script_mode == 0 % for SPM8+VBM8
     % path to the SPM batch job to use as a pipeline, relatively to current script location. If you are not familliar with SPM, this software allows to create a "batch" which is a collection of modules to run in a row. This allows to configure and save full pipelines. We can design a whole SPM batch programmatically, but here we chose to design a batch, load it, and just programmatically redefine some variables (like paths, etc.). This is more easily maintainable, as the neuroscientifical technical data is stored in the batch, and here we basically just automate its usage on any dataset.
-    path_to_batch = 'batch_preproc_spm8_vbm8dartel_midtemplate_defbiascorrected.mat';
+    path_to_batch = 'batch_preproc_spm8_vbm8dartel_midtemplate_defbiascorrected.mat'; % relative to this script path
     % path relative to spm folder
-    path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii';
+    path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii'; % relative to spm path, you can use the default VBM template or a custom one. But always input the 1st template out of the 6.
     % Where are the template segmentation provided by SPM?
     % path to the folder containing grey.nii, white.nii and csf.nii
-    path_to_tpm_grey_white_csf = 'toolbox/Seg';
+    path_to_tpm_grey_white_csf = 'toolbox/Seg'; % relative to spm path
     % Disable incompatible options
     realignunwarp = false;
 elseif script_mode == 1 % for SPM12 OldSeg
     if ~realignunwarp
-        path_to_batch = 'batch_preproc_spm12_oldseg.mat';
+        path_to_batch = 'batch_preproc_spm12_oldseg.mat'; % relative to this script path
     else
-        path_to_batch = 'batch_preproc_spm12_oldseg_unwarp.mat';
+        path_to_batch = 'batch_preproc_spm12_oldseg_unwarp.mat'; % relative to this script path
     end
-    path_to_tissue_proba_map = 'tpm/TPM.nii';
-    path_to_tpm_grey_white_csf = 'toolbox/OldSeg';
+    path_to_tissue_proba_map = 'tpm/TPM.nii'; % relative to spm path
+    path_to_tpm_grey_white_csf = 'toolbox/OldSeg'; % relative to spm path
 elseif script_mode == 2 % for SPM12+CAT12
     if ~realignunwarp
-        path_to_batch = 'batch_preproc_spm12_CAT12Dartel.mat';
+        path_to_batch = 'batch_preproc_spm12_CAT12Dartel.mat'; % relative to this script path
     else
-        path_to_batch = 'batch_preproc_spm12_CAT12Dartel_unwarp.mat';
+        path_to_batch = 'batch_preproc_spm12_CAT12Dartel_unwarp.mat'; % relative to this script path
     end
-    path_to_tissue_proba_map = 'tpm/TPM.nii';
-    path_to_dartel_template = 'toolbox/cat12/templates_1.50mm/Template_1_IXI555_MNI152.nii';
-    path_to_shooting_template = 'toolbox/cat12/templates_1.50mm/Template_0_IXI555_MNI152_GS.nii';
+    path_to_tissue_proba_map = 'tpm/TPM.nii'; % relative to spm path
+    %path_to_dartel_template = 'toolbox/cat12/templates_1.50mm/Template_1_IXI555_MNI152.nii';
+    path_to_shooting_template = 'toolbox/cat12/templates_1.50mm/Template_0_IXI555_MNI152_GS.nii'; % relative to cat12 path
 elseif script_mode == 3 % for SPM12 UniSeg
     if ~realignunwarp
-        path_to_batch = 'batch_preproc_spm12_uniseg.mat';
+        path_to_batch = 'batch_preproc_spm12_uniseg.mat'; % relative to this script path
     else
-        path_to_batch = 'batch_preproc_spm12_uniseg_unwarp.mat';
+        path_to_batch = 'batch_preproc_spm12_uniseg_unwarp.mat'; % relative to this script path
     end
-    path_to_tissue_proba_map = 'tpm/TPM.nii';
+    path_to_tissue_proba_map = 'tpm/TPM.nii'; % relative to spm path
 end
 
 slice_order_auto = {};
@@ -452,14 +456,22 @@ for c = 1:length(conditions)
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.vbm8.estwrite.opts.tpm = {strcat(fullfile(path_to_spm, path_to_tissue_proba_map), ',1')};
                     % Dartel template
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.vbm8.estwrite.extopts.dartelwarp.normhigh.darteltpm = {strcat(path_to_vbm_dartel_template, ',1')};
+                    % Ethnic affine regularization
+                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.vbm8.estwrite.opts.affreg = ethnictemplate;
                 elseif script_mode == 2
                     % CAT12 config: load TPM and DARTEL templates
                     % Tissue probability map (use native Seg toolbox template)
-                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.tpm = {strcat(fullfile(path_to_spm, path_to_tissue_proba_map), ',1')};
+                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.tpm = {fullfile(path_to_spm, path_to_tissue_proba_map)};
+                    % Ethnic affine regularization
+                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.affreg = ethnictemplate;
                     % Dartel template
-                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.darteltpm = {strcat(fullfile(path_to_spm, path_to_dartel_template), ',1')};
+                    % Deprecated if using shooting template in new releases of CAT12
+                    %matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {fullfile(path_to_spm, path_to_dartel_template)};
                     % Dartel shooting template
-                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shootingtpm = {strcat(fullfile(path_to_spm, path_to_shooting_template), ',1')};
+                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {fullfile(path_to_spm, path_to_shooting_template)};
+                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = 0.5;
+                    % SPM preprocessing accuracy
+                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.accstr = cat12_spm_preproc_accuracy;
                 elseif script_mode == 1
                     % SPM12 Old segmentation templates config
                     template_seg_list = {'grey.nii', 'white.nii', 'csf.nii'};
@@ -469,6 +481,8 @@ for c = 1:length(conditions)
                         template_seg_cell = [template_seg_cell; strcat(fullfile(path_to_spm, path_to_tpm_grey_white_csf, template_seg_list{ti}), ',1')];
                     end
                     matlabbatchall{matlabbatchall_counter}{6}.spm.tools.oldseg.opts.tpm = template_seg_cell;
+                    % Ethnic affine regularization
+                    matlabbatchall{matlabbatchall_counter}{6}.spm.tools.oldseg.opts.regtype = ethnictemplate;
                     % Smoothing parameters
                     % Note: for SPM pipelines (ie, without VBM8 nor CAT12), the smoothing is done directly inside the batch. For CAT12/VBM8 however it's not possible, so the smoothing is done separately in another dynamically constructed batch (see below)
                     %if resizeto3
@@ -484,6 +498,8 @@ for c = 1:length(conditions)
                     for i = 1:6
                         matlabbatchall{matlabbatchall_counter}{6}.spm.spatial.preproc.tissue(i).tpm = {[fullfile(path_to_spm, path_to_tissue_proba_map) sprintf(',%i', i)]};
                     end
+                    % Ethnic affine regularization
+                    matlabbatchall{matlabbatchall_counter}{6}.spm.spatial.preproc.warp.affreg = ethnictemplate;
                     % DEPRECATED: Smoothing parameters (now done systematically afterward in a post-processing job)
                     % Note: for SPM pipelines (ie, without VBM8 nor CAT12), the smoothing is done directly inside the batch. For CAT12/VBM8 however it's not possible, so the smoothing is done separately in another dynamically constructed batch (see below)
                     %if resizeto3
