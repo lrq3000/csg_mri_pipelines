@@ -24,6 +24,7 @@ function script_preproc_fmri_csg()
 % * ART
 % * SPM8 (r6313) + VBM8 (r445, inside spm/toolbox folder) OR SPM12 native (r7487, for OldSeg or Unified Segmentation pipelines) OR SPM12 (r7487) + CAT12 (r1434, inside spm/toolbox folder)
 % * (optional) RSHRF toolbox if you want to deconvolve the haemodynamic response function (set enable_rshrf to true)
+% Note: old versions of CAT12 can be downloaded at: http://www.neuro.uni-jena.de/cat12/
 %
 % Stephen Karl Larroque
 % 2016-2018

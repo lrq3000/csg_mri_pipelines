@@ -11,7 +11,7 @@ function vbm_script_preproc_csg()
 %
 % Exact versioning:
 % * SPM12 Version 7487 (SPM12) 14-Nov-18 (from spm/Contents.m or by typing [a, b] = spm('Ver))
-% * CAT12 r1434 | gaser | 2019-02-28 11:31:30 (from cat12/CHANGES.txt)
+% * CAT12 r1434 | gaser | 2019-02-28 11:31:30 (from cat12/CHANGES.txt) - old versions can be downloaded at: http://www.neuro.uni-jena.de/cat12/
 % * SPM8 Version 6313
 % * VBM8 r445 | gaser | 2015-12-17 14:26:55 (from vbm8/CHANGES.txt)
 %
@@ -24,7 +24,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself Python is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.3.3
+% v1.3.4
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
@@ -47,7 +47,7 @@ path_to_spm = 'C:\matlab_tools\spm12_fdr'; % change to spm8 or spm12 path depend
 path_to_vbm8 = 'C:\matlab_tools\spm8\toolbox\vbm8'; % only necessary if script_mode == 0
 path_to_cat12 = 'C:\matlab_tools\spm12_fdr\toolbox\cat12'; % only necessary if script_mode == 1
 script_mode = 1; % 0: SPM8+VBM8(DARTEL), 1: SPM12+CAT12(SHOOT, successor of DARTEL), ref: https://www.researchgate.net/post/MR_brain_volume_spatial_normalization
-num_cores = 0; % number of cores to use for parallel calculation in CAT12: use 0 to disable. For VBM8, multi-threading is always enabled and the number of cores cannot be chosen.
+num_cores = 0; % number of cores to use for parallel calculation in CAT12: use 0 to disable. For VBM8, multi-threading is always enabled and the number of cores cannot be chosen. IMPORTANT: on CAT12 before v12.6, there is an issue with parallelization, if you set num_cores > 0 the script will crash after preprocessing, so meanwhile please keep this at 0! (you can still set parallel_processing == true to parallelize between subjects).
 smoothsize = 12; % 12 for patients with damaged brains, 8 or 10 for healthy volunteers
 skip1stlevel = 0; % only do 2nd-level analysis, skip preprocessing (particularly useful to continue at 2nd level directly if a bug happened or you change parameters such as significance)
 skipcsfmask = 0; % do not apply a CSF exclusion mask in the results in SPM.mat
