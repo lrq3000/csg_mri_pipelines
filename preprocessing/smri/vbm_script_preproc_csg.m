@@ -57,7 +57,7 @@ skip2ndlevel = 0; % if you only want to do VBM preprocessing but not compare aga
 skipresults = 0; % if you do not want to generate the result images from the 2nd level results (requires skip2ndlevel set to 0)
 parallel_processing = false; % enable parallel processing between multiple subjects (num_cores need to be set to 0 to disable parallel processing inside CAT12, so we can parallelize outside!)
 ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization, 'subj' for the average of subjects (might be incompatible with CAT12 as it is not offered on the GUI)
-cat12_spm_preproc_accuracy = 0.75; % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12). Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases).
+cat12_spm_preproc_accuracy = 0.5; % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12). Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases - from script's author's own tests, there is not much visible difference).
 
 if script_mode == 0
     path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii'; % relative to spm path
