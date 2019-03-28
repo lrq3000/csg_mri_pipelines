@@ -1,0 +1,1 @@
+* Use https://github.com/PySimpleGUI/PySimpleGUI instead of Gooey, for a more modular GUI interface (and realtime console progress bar and infos)
