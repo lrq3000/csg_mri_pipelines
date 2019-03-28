@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.3'
+__version__ = '1.2.4'
 
 import argparse
 import os
@@ -323,7 +323,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
             if verbose: print("- Processing file: %s" % file)
             try:
                 matlab.spm_auto_reorient(file)
-            except Exception:
+            except Exception as exc:
                 print('ERROR: an exception happened while auto-reorienting file %s' % file)
                 print(exc)
                 print('Skipping this file and continuing.')
