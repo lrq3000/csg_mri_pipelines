@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # reorientation_registration_helper.py
-# Copyright (C) 2016-2017 Larroque Stephen
+# Copyright (C) 2016-2019 Larroque Stephen
 #
 # Licensed under the MIT License (MIT)
 #
@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.2'
+__version__ = '1.2.3'
 
 import argparse
 import os
@@ -321,7 +321,12 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         # Auto reorient anatomical images
         for file in tqdm(anat_list, leave=True, unit='files'):
             if verbose: print("- Processing file: %s" % file)
-            matlab.spm_auto_reorient(file)
+            try:
+                matlab.spm_auto_reorient(file)
+            except Exception:
+                print('ERROR: an exception happened while auto-reorienting file %s' % file)
+                print(exc)
+                print('Skipping this file and continuing.')
 
     # == CHECK REORIENT AND MANUAL ADJUSTMENT
     print("\n=> STEP2: CHECK REORIENT AND ADJUST MANUALLY STRUCTURAL MRI")
