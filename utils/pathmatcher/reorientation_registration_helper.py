@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.4'
+__version__ = '1.2.5'
 
 import argparse
 import os
@@ -117,7 +117,8 @@ def str_to_raw(str):
         return str.encode().decode('unicode_escape')
 
 def filestr_to_raw(str):
-    '''Convert a filepath to raw string only if resulting filepath exist'''
+    '''Convert a filepath to raw string only if resulting filepath exist
+    This is necessary when passing any path to mlab matlab functions'''
     escaped = str_to_raw(str)
     return escaped if os.path.exists(escaped) else str
 
@@ -297,14 +298,16 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
 
     # == IMPORT MLAB (LOAD MATLAB BRIDGE)
     print("Launching MATLAB, please wait a few seconds...")
-    os.chdir(rootfolderpath)  # Change Python current directory before launching MATLAB, this will change the initial dir of MATLAB
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Change Python current directory before launching MATLAB, this will change the initial dir of MATLAB, this will allow to find the auxiliay functions
+    #matlab.cd(rootfolderpath)  # FIXME: Does not work: Change MATLAB's current dir to root of project's folder, will be easier for user to load other images if needed
     try:
         from mlab.releases import latest_release as matlab
         from mlab import mlabraw
+        matlab.addpath(filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))  # add current folder to the path to have access to helper .m scripts, this needs to be done before each command call
+        # Nota bene: to add the auxiliary local matlab scripts to be accessible in mlab, we need to do two things: 1. os.chdir() in the local directory before launching mlab, 2. addpath in matlab afterwards (with filepath converted to raw path format). Anything else would raise a bug at some point!
     except ImportError as exc:
-        print("You need to install https://github.com/ewiger/mlab to use this script!")
+        print("You need to install https://github.com/ewiger/mlab and to add SPM12 in your MATLAB path to use this script!")
         raise(exc)
-    #matlab.cd(rootfolderpath)  # FIXME: Does not work: Change MATLAB's current dir to root of project's folder, will be easier for user to load other images if needed
 
     # == Anatomical files walking
     print("Please wait while the directories are scanned to find anatomical images...")
@@ -339,7 +342,10 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
             if uchoice == False: continue
             #matlab.cd(os.path.dirname(file))  # FIXME: does not work...
             os.chdir(os.path.dirname(file))  # Workaround: Change Python and MATLAB's path to the folder where the anatomical file is, so that user just needs to click on it
-            matlab.spm_image('display', filestr_to_raw(file))  # Convert path to raw string to avoid \0 MATLAB string termination character
+            #matlab.spm_image('display', filestr_to_raw(file))  # Convert path to raw string to avoid \0 MATLAB string termination character
+            #matlab.spm_orthviews('AddContext')  # add the contextual menu (right-click) with additional options such as intensity histogram equalization  # mlab is not thread-safe, this cannot work because it needs to get the figure handle...
+            matlab.addpath(filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))  # add current folder to the path to have access to helper .m scripts, this needs to be done before each command call
+            matlab.reorienthelper(filestr_to_raw(file))  # combination of the two previous commands in a matlab function so that we workaround the thread issue of the mlab module (which prevents it from managing figures handles)
 
     # == CHECK MULTIPLE IMAGES TOGETHER
     print("\n=> STEP3: SIDE-BY-SIDE CHECK MULTIPLE SUBJECTS")
