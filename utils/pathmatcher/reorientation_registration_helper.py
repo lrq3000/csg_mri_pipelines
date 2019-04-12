@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.5'
+__version__ = '1.2.6'
 
 import argparse
 import os
@@ -319,6 +319,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     # == SPM_AUTO_REORIENT
     # Get the list of anatomical images
     print("\n=> STEP1: SPM_AUTO_REORIENT OF STRUCTURAL MRI")
+    print("Please make sure to install SPM12 and spm_auto_reorient.m tool beforehand, from: https://github.com/lrq3000/spm_auto_reorient")
     if ask_step():  # Wait for user to be ready
         print("Starting the auto-reorienting process, please wait (this can take a while)...")
         # Auto reorient anatomical images
