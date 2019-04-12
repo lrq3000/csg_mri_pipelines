@@ -263,9 +263,11 @@ A companion to help you reorient and coregister manually your structural and fun
 
 This helper script will scan all images in the specified input path, and will accompagny you step-by-step to do the reorientation and coregistration correctly.
 
+This script requires SPM12 (and MATLAB).
+
 This script follows the following steps:
 
-1. Automatic reorientation of structural MRI using [spm_auto_reorient.m (see CRC Cyclotron Github)](https://github.com/CyclotronResearchCentre/spm_auto_reorient).
+1. Automatic reorientation of structural MRI using [spm_auto_reorient.m](https://github.com/lrq3000/spm_auto_reorient) (please install this script along with SPM12 beforehand).
 2. Check reorient and adjust manually.
 3. Side-by-side check of multiple subjects' structural MRI.
 4. Manual co-registration of functional images with structural.
