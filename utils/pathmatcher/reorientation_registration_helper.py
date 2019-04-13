@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # reorientation_registration_helper.py
-# Copyright (C) 2016-2019 Larroque Stephen
+# Copyright (C) 2016-2019 Stephen Karl Larroque
 #
 # Licensed under the MIT License (MIT)
 #
@@ -26,7 +26,7 @@
 #=================================
 #        Reorientation and Registration helper
 #                    Python 2.7.11
-#                by Stephen Larroque
+#                by Stephen Karl Larroque
 #                     License: MIT
 #            Creation date: 2016-03-27
 #=================================
@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.6'
+__version__ = '1.3.0'
 
 import argparse
 import os
@@ -316,10 +316,11 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     anat_list = [os.path.join(rootfolderpath, file) for file in anat_list]  # calculate full absolute path instead of relative (since we need to pass them to MATLAB)
     print("Found %i anatomical images." % len(anat_list))
 
-    # == SPM_AUTO_REORIENT
+    # == AUTOMATIC REORIENTATION VIA SPM_AUTO_REORIENT
     # Get the list of anatomical images
     print("\n=> STEP1: SPM_AUTO_REORIENT OF STRUCTURAL MRI")
     print("Please make sure to install SPM12 and spm_auto_reorient.m tool beforehand, from: https://github.com/lrq3000/spm_auto_reorient")
+    print("NOTE: if you already did this step and began STEP2 (manual reorient), then SKIP THIS STEP to avoid losing your manual progress!")
     if ask_step():  # Wait for user to be ready
         print("Starting the auto-reorienting process, please wait (this can take a while)...")
         # Auto reorient anatomical images
@@ -333,7 +334,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 print('Skipping this file and continuing.')
 
     # == CHECK REORIENT AND MANUAL ADJUSTMENT
-    print("\n=> STEP2: CHECK REORIENT AND ADJUST MANUALLY STRUCTURAL MRI")
+    print("\n=> STEP2: MANUAL REORIENT/CHECK OF STRUCTURAL MRI")
     print("Anatomical will now be displayed. Please check that they are correctly oriented, if not, please adjust manually.")
     if ask_step():  # Wait for user to be ready
         for file in tqdm(anat_list, leave=True, unit='files'):
@@ -373,65 +374,98 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
             # os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
             # pathmatcher.main(r' -i "{inputpath}/{firstcond}" -ri "([^\/]+)/data/mprage/" -o "{inputpath}/{tocond}" -ro "\1/data/mprage/" --copy --force --yes --silent '.format(**template_vars), True)
 
-    # == COREGISTRATION
-    print("\n=> STEP4: MANUAL COREGISTRATION OF FUNCTIONAL IMAGES")
+    # == DETECT FUNCTIONAL IMAGES
+    print("\n=> STEP4: DETECTION OF FUNCTIONAL IMAGES")
+    print("Functional images will now be detected and associated with their relative structural images, please press ENTER and wait (can be a bit long)...")
+    raw_input()
+    # -- Walk files and detect functional images (we already got structural)
+    os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
+    func_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "{regex_func}" --silent '.format(**template_vars), True)
+    func_list = [file[0] for file in func_list]  # extract only the input match, there's no output anyway
+    print("Found %i functional images." % len(func_list))
+
+    # -- Precomputing to pair together anatomical images and functional images of the same patient for the same condition
+    # Technically, we construct a lookup table where the key is the concatenation of all regex groups
+    # For this we use two regex that we apply on file paths: one for anatomical images and one for functional images.
+    # The regex groups are then used as the key to assign this file in the lookup table, and then assigned to a subdict 'anat' or 'func' depending on the regex used.
+    # This is both flexible because user can provide custom regex and precise because the key is normally unique
+    # (this is more flexible than previous approach to walk both anat and func files at once because it would necessitate a 3rd regex)
+    im_table = OrderedDict()  # Init lookup table. Always use an OrderedDict so that we walk the subjects id by the same order every time we launch the program (allows to skip already processed subjects)
+    RE_anat = re.compile(regex_anat)
+    RE_func = re.compile(regex_func)
+    for img_list in [anat_list, func_list]:
+        if img_list == anat_list:
+            im_type = 'anat'
+        else:
+            im_type = 'func'
+
+        for file in img_list:
+            # Match the regex on each file path, to detect the regex groups (eg, condition, subject id and type of imagery)
+            # Note: use re.search() to allow for partial match (like pathmatcher), not re.match()
+            if im_type == 'anat':
+                m = RE_anat.search(file)
+            else:  # im_type == 'func':
+                m = RE_func.search(file)
+            if m is None:
+                print('Error: no regex match found for type %s file: %s' % (im_type, file))
+            # Use these metadata to build our images lookup table, with every images grouped and organized according to these parameters
+            # TODO: maybe use a 3rd party lib to do this more elegantly? To group strings according to values in the string that match together?
+            im_key = '_'.join(m.groups())  # Note: you can use non-capturing groups like (?:non-captured) to avoid capturing things you don't want but you still want to group (eg, for an OR)
+            # Create entry if does not exist
+            if im_key not in im_table:
+                im_table[im_key] = {}
+            if im_type not in im_table[im_key]:
+                im_table[im_key][im_type] = []
+            # Append file path to the table at its correct place
+            # Note that no conflict is possible here (no file can overwrite another), because we just append them all.
+            # But files that are not meant to be grouped can be grouped in the end, so you need to make sure your regex is correct (can use pathmatcher or --verbose to check).
+            im_table[im_key][im_type].append(file)
+
+    # Precompute total number of elements user will have to process (to show progress bar)
+    total_func_images = len(im_table)
+
+    # == AUTOMATIC COREGISTRATION
+    print("\n=> STEP5: AUTOMATIC COREGISTRATION OF FUNCTIONAL IMAGES")
+    print("Functional images will be automatically coregistered to their relative structural image.")
+    print("NOTE: if you already did this step and began STEP6 (manual coregistration), then SKIP THIS STEP to avoid losing your manual progress!")
+    if ask_step():  # Wait for user to be ready
+        # -- Proceeding to MATLAB checkreg
+        current_image = 0
+        # for each key (can be each condition, session, subject, or even a combination of all those and more)
+        for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
+            current_image += 1
+            # Sort images
+            im_table[im_key]['anat'].sort()
+            im_table[im_key]['func'].sort()
+            # Pick the image
+            im_anat = im_table[im_key]['anat'][0]  # pick the first T1
+            im_func = im_table[im_key]['func'][0]  # pick first EPI BOLD, this will be the source
+            im_func_others = im_table[im_key]['func'][1:]  # pick other functional images, these will be the "others" images that will also be transformed the same as source
+            if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
+            # Build full absolute path for MATLAB
+            im_anat = os.path.join(rootfolderpath, im_anat)
+            im_func = os.path.join(rootfolderpath, im_func)
+            im_func_others = [os.path.join(rootfolderpath, imf) for imf in im_func_others]
+            # Basic support for 4D nifti: select the first image
+            #if len(im_table[im_key]['func']) == 1:
+            im_func += ',1'
+            # Send to MATLAB checkreg!
+            matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
+            matlab.functionalcoreg(im_anat, im_func, im_func_others)
+
+    # == MANUAL COREGISTRATION
+    print("\n=> STEP6: MANUAL COREGISTRATION OF FUNCTIONAL IMAGES")
     print("A randomly selected functional image will now be displayed (bottom) along the corresponding anatomical image (top). Please reorient the functional image to match the anatomical image, and select all functional images to apply the reorientation.")
     print("This step is very important, because the automatic coregistration algorithms are not optimal (they cannot be, the problem is non-linear), and thus they can fall in local optimums. A good manual coregistration ensures the automatic coregistration will be on-the-spot!")
     print("NOTE: you need to right-click on the bottom image, then click on Reorient Images > Current image. Red contours of the bottom functional image will be overlaid on the top anatomical image, and a side menu will open to allow you to reorient the bottom image and apply on other functional images.")
     print("NOTE2: you can also enhance the contrasts by right-clicking on functional image and select Zoom > This image non zero, by setting the number of contours to 2 instead of 3, and by right-clicking on the anatomical image and select Image > Intensity Mapping > local > Equalised squared-histogram (you can also do the same intensity mapping change on the functional image, the contours will adapt according to the greater contrast).")
 
     if ask_step():  # Wait for user to be ready
-        # -- Walk files and detect functional images (we already got structural)
-        os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
-        func_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "{regex_func}" --silent '.format(**template_vars), True)
-        func_list = [file[0] for file in func_list]  # extract only the input match, there's no output anyway
-        print("Found %i functional images." % len(func_list))
-
-        # -- Precomputing to pair together anatomical images and functional images of the same patient for the same condition
-        # Technically, we construct a lookup table where the key is the concatenation of all regex groups
-        # For this we use two regex that we apply on file paths: one for anatomical images and one for functional images.
-        # The regex groups are then used as the key to assign this file in the lookup table, and then assigned to a subdict 'anat' or 'func' depending on the regex used.
-        # This is both flexible because user can provide custom regex and precise because the key is normally unique
-        # (this is more flexible than previous approach to walk both anat and func files at once because it would necessitate a 3rd regex)
-        im_table = OrderedDict()  # Init lookup table. Always use an OrderedDict so that we walk the subjects id by the same order every time we launch the program (allows to skip already processed subjects)
-        RE_anat = re.compile(regex_anat)
-        RE_func = re.compile(regex_func)
-        for img_list in [anat_list, func_list]:
-            if img_list == anat_list:
-                im_type = 'anat'
-            else:
-                im_type = 'func'
-
-            for file in img_list:
-                # Match the regex on each file path, to detect the regex groups (eg, condition, subject id and type of imagery)
-                # Note: use re.search() to allow for partial match (like pathmatcher), not re.match()
-                if im_type == 'anat':
-                    m = RE_anat.search(file)
-                else:  # im_type == 'func':
-                    m = RE_func.search(file)
-                if m is None:
-                    print('Error: no regex match found for type %s file: %s' % (im_type, file))
-                # Use these metadata to build our images lookup table, with every images grouped and organized according to these parameters
-                # TODO: maybe use a 3rd party lib to do this more elegantly? To group strings according to values in the string that match together?
-                im_key = '_'.join(m.groups())  # Note: you can use non-capturing groups like (?:non-captured) to avoid capturing things you don't want but you still want to group (eg, for an OR)
-                # Create entry if does not exist
-                if im_key not in im_table:
-                    im_table[im_key] = {}
-                if im_type not in im_table[im_key]:
-                    im_table[im_key][im_type] = []
-                # Append file path to the table at its correct place
-                # Note that no conflict is possible here (no file can overwrite another), because we just append them all.
-                # But files that are not meant to be grouped can be grouped in the end, so you need to make sure your regex is correct (can use pathmatcher or --verbose to check).
-                im_table[im_key][im_type].append(file)
-
-        # Precompute total number of elements user will have to process (to show progress bar)
-        total_images_step5 = len(im_table)
-
-        # -- Processing to MATLAB checkreg
-        current_image_step5 = 0
+        # -- Proceeding to MATLAB checkreg
+        current_image = 0
         # for each key (can be each condition, session, subject, or even a combination of all those and more)
-        for im_key in tqdm(im_table.keys(), total=total_images_step5, initial=current_image_step5, leave=True, unit='subjects'):
-            current_image_step5 += 1
+        for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
+            current_image += 1
             # Wait for user to be ready
             uchoice = ask_next(msg='Open next registration for subject %s? Enter to [c]ontinue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (im_key))  # ask user if we load the next file?
             if uchoice is None: break
