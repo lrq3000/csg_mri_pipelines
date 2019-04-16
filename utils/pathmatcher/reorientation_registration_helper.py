@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.3.0'
+__version__ = '1.3.1'
 
 import argparse
 import os
@@ -434,6 +434,9 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         # for each key (can be each condition, session, subject, or even a combination of all those and more)
         for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
             current_image += 1
+            # check if there is both anatomical and structural images available, if one is missing we simply skip
+            if 'anat' not in im_table[im_key] or 'func' not in im_table[im_key]:
+                continue
             # Sort images
             im_table[im_key]['anat'].sort()
             im_table[im_key]['func'].sort()
