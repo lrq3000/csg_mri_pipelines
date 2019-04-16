@@ -22,7 +22,7 @@ function functionalcoreg(struct,func,others,mode,modality)
 % OUT:
 % - the voxel-to-world part of the headers of the selected source (func) and others images is modified.
 %__________________________________________________________________________
-% v1.0.2
+% v1.0.3
 % License: MIT License
 % Copyright (C) 2019 Stephen Karl Larroque - Coma Science Group - GIGA-Consciousness - University & Hospital of Liege
 % Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -109,6 +109,7 @@ if strcmp(mode,'mi') | strcmp(mode,'both')
     % Configure coregistration
     flags2.cost_fun = 'mi';  % ncc works remarkably well, when it works, else it fails very badly...
     flags2.tol = [0.02, 0.02, 0.02, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001];  % VERY important to get good results, these are defaults from the GUI
+    flags2.fwhm = [3, 3];  % reduce smoothing for more efficient coregistering, since the pre-coregistration normally should have placed the brain quite in the correct spot overall. This greatly enhances results, particularly on brain damaged subjects.
     % Load images
     Vstruct = spm_vol(struct);
     Vfunc = spm_vol(func);
