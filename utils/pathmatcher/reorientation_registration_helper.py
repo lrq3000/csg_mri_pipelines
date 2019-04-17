@@ -25,7 +25,7 @@
 #
 #=================================
 #        Reorientation and Registration helper
-#                    Python 2.7.11
+#                    Python 2.7.15
 #                by Stephen Karl Larroque
 #                     License: MIT
 #            Creation date: 2016-03-27
@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.3.1'
+__version__ = '1.4.0'
 
 import argparse
 import os
@@ -243,7 +243,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     main_parser.add_argument('-ra', '--regex_anat', metavar='"(reg_expr)+/anat\.(img|nii)"', type=str, required=False, default=None,
                         help='Regular expression to match anatomical images (default: Liege CRC scheme). Use regex groups to match with functional regex (if you want to do step 4 - manual coreg). Note: should target nii or img, not hdr.', **widget_text)
     main_parser.add_argument('-rf', '--regex_func', metavar='"(reg_expr)+/func\.(img|nii)"', type=str, required=False, default=None,
-                        help='Regular expression to match functional images (default: Liege CRC scheme). Regex groups will be matched with the anatomical regex, so you should provide the same groups for both regex. Note: should target nii or img, not hdr (using non-capturing group, eg: ".*\.(?:img|nii)".', **widget_text)
+                        help='Regular expression to match functional images (default: Liege CRC scheme). Regex groups will be matched with the anatomical regex, so you should provide the same groups for both regex. Note: should target nii or img, not hdr (using non-capturing group, eg: ".*\.(?:img|nii)". If a named group (?P<func>...) is specified, this will allow to separately coregister any file matching this group, which will be removed from the list of regex groups (thus this group is additional, it does not count in the "same number of groups" rule).', **widget_text)
     main_parser.add_argument('-v', '--verbose', action='store_true', required=False, default=False,
                         help='Verbose mode (show more output).')
 
@@ -274,7 +274,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     if regex_anat is None:
         regex_anat = r'(\dir)/(\dir)/data/(\dir/)?mprage/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/mprage/struct.(img|nii)
     if regex_func is None:
-        regex_func = r'(\dir)/(\dir)/data/(\dir/)?rest/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/rest/func_01.(img|nii)
+        regex_func = r'(\dir)/(\dir)/data/(?P<func>\dir/)?rest/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/rest/func_01.(img|nii)
 
     # -- Preprocess regular expression to add aliases
     # Directory alias
@@ -376,7 +376,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
 
     # == DETECT FUNCTIONAL IMAGES
     print("\n=> STEP4: DETECTION OF FUNCTIONAL IMAGES")
-    print("Functional images will now be detected and associated with their relative structural images, please press ENTER and wait (can be a bit long)...")
+    print("Functional images will now be detected and associated with their relative structural images.\nPlease press ENTER and wait (can be a bit long)...")
     raw_input()
     # -- Walk files and detect functional images (we already got structural)
     os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
@@ -410,16 +410,38 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 print('Error: no regex match found for type %s file: %s' % (im_type, file))
             # Use these metadata to build our images lookup table, with every images grouped and organized according to these parameters
             # TODO: maybe use a 3rd party lib to do this more elegantly? To group strings according to values in the string that match together?
-            im_key = '_'.join(m.groups())  # Note: you can use non-capturing groups like (?:non-captured) to avoid capturing things you don't want but you still want to group (eg, for an OR)
+            mdict = m.groupdict()
+            if im_type == 'anat' or im_type not in mdict:
+                im_key = '_'.join(m.groups())  # Note: you can use non-capturing groups like (?:non-captured) to avoid capturing things you don't want but you still want to group (eg, for an OR)
+            else:
+                # A named group for func is present
+                mgroups = list(m.groups())
+                # Remove the value matched by 'func' from the non-dict groups
+                mgroups.remove(mdict[im_type])
+                # Use the non-dict groups as the key
+                im_key = '_'.join(mgroups)
             # Create entry if does not exist
             if im_key not in im_table:
+                # Creade node
                 im_table[im_key] = {}
             if im_type not in im_table[im_key]:
-                im_table[im_key][im_type] = []
+                if im_type == 'func' and im_type in mdict:
+                    # Create node
+                    im_table[im_key][im_type] = {}
+                else:
+                    # Create leaf
+                    im_table[im_key][im_type] = []
+            if im_type == 'func' and im_type in mdict and mdict[im_type] not in im_table[im_key][im_type]:
+                # Create leaf
+                im_table[im_key][im_type][mdict[im_type]] = []
             # Append file path to the table at its correct place
             # Note that no conflict is possible here (no file can overwrite another), because we just append them all.
             # But files that are not meant to be grouped can be grouped in the end, so you need to make sure your regex is correct (can use pathmatcher or --verbose to check).
-            im_table[im_key][im_type].append(file)
+            if im_type == 'anat' or im_type not in mdict:
+                im_table[im_key][im_type].append(file)
+            else:
+                # Named group for func is present, we create a subfolder for each value (so that multiple func folders can be stored)
+                im_table[im_key][im_type][mdict[im_type]].append(file)
 
     # Precompute total number of elements user will have to process (to show progress bar)
     total_func_images = len(im_table)
@@ -437,24 +459,33 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
             # check if there is both anatomical and structural images available, if one is missing we simply skip
             if 'anat' not in im_table[im_key] or 'func' not in im_table[im_key]:
                 continue
-            # Sort images
-            im_table[im_key]['anat'].sort()
-            im_table[im_key]['func'].sort()
-            # Pick the image
-            im_anat = im_table[im_key]['anat'][0]  # pick the first T1
-            im_func = im_table[im_key]['func'][0]  # pick first EPI BOLD, this will be the source
-            im_func_others = im_table[im_key]['func'][1:]  # pick other functional images, these will be the "others" images that will also be transformed the same as source
-            if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
-            # Build full absolute path for MATLAB
-            im_anat = os.path.join(rootfolderpath, im_anat)
-            im_func = os.path.join(rootfolderpath, im_func)
-            im_func_others = [os.path.join(rootfolderpath, imf) for imf in im_func_others]
-            # Basic support for 4D nifti: select the first image
-            #if len(im_table[im_key]['func']) == 1:
-            im_func += ',1'
-            # Send to MATLAB checkreg!
-            matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
-            matlab.functionalcoreg(im_anat, im_func, im_func_others)
+            # prepare the functional images list (there might be multiple folders)
+            if isinstance(im_table[im_key]['func'], dict):
+                # multiple folders
+                funclists = im_table[im_key]['func'].values()
+            else:
+                # only one folder, we simply put it in a list so that we don't break the loop
+                funclists = [im_table[im_key]['func']]
+            # For each functional image subfolder
+            for funclist in funclists:
+                # Sort images
+                im_table[im_key]['anat'].sort()
+                funclist.sort()
+                # Pick the image
+                im_anat = im_table[im_key]['anat'][0]  # pick the first T1
+                im_func = funclist[0]  # pick first EPI BOLD, this will be the source
+                im_func_others = funclist[1:]  # pick other functional images, these will be the "others" images that will also be transformed the same as source
+                if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
+                # Build full absolute path for MATLAB
+                im_anat = os.path.join(rootfolderpath, im_anat)
+                im_func = os.path.join(rootfolderpath, im_func)
+                im_func_others = [os.path.join(rootfolderpath, imf) for imf in im_func_others]
+                # Basic support for 4D nifti: select the first image
+                #if len(im_table[im_key]['func']) == 1:
+                im_func += ',1'
+                # Send to MATLAB checkreg!
+                matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
+                matlab.functionalcoreg(im_anat, im_func, im_func_others)
 
     # == MANUAL COREGISTRATION
     print("\n=> STEP6: MANUAL COREGISTRATION OF FUNCTIONAL IMAGES")
@@ -469,51 +500,60 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         # for each key (can be each condition, session, subject, or even a combination of all those and more)
         for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
             current_image += 1
-            # Wait for user to be ready
-            uchoice = ask_next(msg='Open next registration for subject %s? Enter to [c]ontinue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (im_key))  # ask user if we load the next file?
-            if uchoice is None: break
-            if uchoice == False: continue
-            select_t2_nb = None  # for user to specify a specific T2 image
-            while 1:
-                # Pick a T1 and T2 images for this subject
-                if select_t2_nb is not None:
-                    # Pick a specific image specified by user
-                    im_table[im_key]['anat'].sort()  # first, sort the lists of files
-                    im_table[im_key]['func'].sort()
-                    # Pick the image
-                    im_anat = im_table[im_key]['anat'][0]  # pick the first T1
-                    im_func = im_table[im_key]['func'][select_t2_nb]  # then pick the selected functional image
-                else:
-                    # Randomly choose one anatomical image (there should be only one anyway) and one functional image
-                    im_anat = random.choice(im_table[im_key]['anat'])
-                    im_func = random.choice(im_table[im_key]['func'])
-                if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
-                # Build full absolute path for MATLAB
-                im_anat = os.path.join(rootfolderpath, im_anat)
-                im_func = os.path.join(rootfolderpath, im_func)
-                # Basic support for 4D nifti: select the first image
-                #if len(im_table[im_key]['func']) == 1:
-                im_func += ',1'
-                # Send to MATLAB checkreg!
-                matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
-                matlab.spm_check_registration(im_anat, im_func)
-                # Allow user to select another image if not enough contrast
-                im_func_total = len(im_table[im_key]['func']) - 1  # total number of functional images
-                uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i), Enter to [c]ontinue to next subject: " % (im_func_total), customchoices=['r', 'first', 'last', 'int'])
-                if uchoice is True:  # continue if pressed enter or c
-                    break
-                elif uchoice == 'r':  # select a random image
-                    select_t2_nb = None
-                elif uchoice == 'first':  # select first image
-                    select_t2_nb = 0
-                elif uchoice == 'last':  # select last image
-                    select_t2_nb = -1
-                elif is_int(uchoice) and uchoice is not False:  # Select specific image by number
-                    select_t2_nb = int(uchoice)
-                    # Check the number is between bounds, else select a random image
-                    if not (0 <= select_t2_nb <= im_func_total):
+            # prepare the functional images list (there might be multiple folders)
+            if isinstance(im_table[im_key]['func'], dict):
+                # multiple folders
+                funclists = im_table[im_key]['func'].values()
+            else:
+                # only one folder, we simply put it in a list so that we don't break the loop
+                funclists = [im_table[im_key]['func']]
+            # For each functional image subfolder
+            for i, funclist in enumerate(funclists):
+                # Wait for user to be ready
+                uchoice = ask_next(msg='Open next registration for subject %s session %i? Enter to [c]ontinue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (im_key, i))  # ask user if we load the next file?
+                if uchoice is None: break
+                if uchoice == False: continue
+                select_t2_nb = 0  # for user to specify a specific T2 image, by default the first image (because in general we coregister the first volume on structural)
+                while 1:
+                    # Pick a T1 and T2 images for this subject
+                    if select_t2_nb is not None:
+                        # Pick a specific image specified by user
+                        im_table[im_key]['anat'].sort()  # first, sort the lists of files
+                        funclist.sort()
+                        # Pick the image
+                        im_anat = im_table[im_key]['anat'][0]  # pick the first T1
+                        im_func = funclist[select_t2_nb]  # then pick the selected functional image
+                    else:
+                        # Randomly choose one anatomical image (there should be only one anyway) and one functional image
+                        im_anat = random.choice(im_table[im_key]['anat'])
+                        im_func = random.choice(funclist)
+                    if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
+                    # Build full absolute path for MATLAB
+                    im_anat = os.path.join(rootfolderpath, im_anat)
+                    im_func = os.path.join(rootfolderpath, im_func)
+                    # Basic support for 4D nifti: select the first image
+                    #if len(im_table[im_key]['func']) == 1:
+                    im_func += ',1'
+                    # Send to MATLAB checkreg!
+                    matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
+                    matlab.spm_check_registration(im_anat, im_func)
+                    # Allow user to select another image if not enough contrast
+                    im_func_total = len(funclist) - 1  # total number of functional images
+                    uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i), Enter to [c]ontinue to next session or subject: " % (im_func_total), customchoices=['r', 'first', 'last', 'int'])
+                    if uchoice is True:  # continue if pressed enter or c
+                        break
+                    elif uchoice == 'r':  # select a random image
                         select_t2_nb = None
-                    print("Number : %i" % select_t2_nb)
+                    elif uchoice == 'first':  # select first image
+                        select_t2_nb = 0
+                    elif uchoice == 'last':  # select last image
+                        select_t2_nb = -1
+                    elif is_int(uchoice) and uchoice is not False:  # Select specific image by number
+                        select_t2_nb = int(uchoice)
+                        # Check the number is between bounds, else select a random image
+                        if not (0 <= select_t2_nb <= im_func_total):
+                            select_t2_nb = None
+                        print("Number : %i" % select_t2_nb)
 
     # == END: now user must execute the standard preprocessing script
     print("\nAll done. You should now use the standard preprocessing script. Quitting.")
