@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.4.0'
+__version__ = '1.4.1'
 
 import argparse
 import os
@@ -500,6 +500,9 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         # for each key (can be each condition, session, subject, or even a combination of all those and more)
         for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
             current_image += 1
+            # check if there is both anatomical and structural images available, if one is missing we simply skip
+            if 'anat' not in im_table[im_key] or 'func' not in im_table[im_key]:
+                continue
             # prepare the functional images list (there might be multiple folders)
             if isinstance(im_table[im_key]['func'], dict):
                 # multiple folders
@@ -510,7 +513,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
             # For each functional image subfolder
             for i, funclist in enumerate(funclists):
                 # Wait for user to be ready
-                uchoice = ask_next(msg='Open next registration for subject %s session %i? Enter to [c]ontinue, [S]kip to next condition, [N]ext subject, [A]bort: ' % (im_key, i))  # ask user if we load the next file?
+                uchoice = ask_next(msg='Open next registration for subject %s session %i? Enter to [c]ontinue, Skip to [n]ext session, [S]kip to next subject, [A]bort: ' % (im_key, i))  # ask user if we load the next file?
                 if uchoice is None: break
                 if uchoice == False: continue
                 select_t2_nb = 0  # for user to specify a specific T2 image, by default the first image (because in general we coregister the first volume on structural)
