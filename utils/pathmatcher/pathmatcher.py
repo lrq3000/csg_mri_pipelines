@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # pathmatcher.py
-# Copyright (C) 2016-2018 Larroque Stephen
+# Copyright (C) 2016-2019 Larroque Stephen
 #
 # Licensed under the MIT License (MIT)
 #
@@ -25,7 +25,7 @@
 #
 #=================================
 #        Regular Expression Path Reorganizer
-#                    Python 2.7.11
+#                    Python 2.7.15
 #                by Stephen Larroque
 #                     License: MIT
 #            Creation date: 2016-03-24
@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.1.0'
+__version__ = '1.2.0'
 
 import argparse
 import os
@@ -270,6 +270,14 @@ def move_any(src, dst, only_missing=False):  # pragma: no cover
             return True
     return False
 
+def pop_first_namedgroup(groupdict, value):
+    """Search a value in a groupdict and remove the first key found from the dict"""
+    for k,v in groupdict.items():
+        if v == value:
+            groupdict.pop(k)
+            return k, v, groupdict
+    return False, v, groupdict
+
 
 
 #***********************************
@@ -282,12 +290,9 @@ try:  # pragma: no cover
 except ImportError as exc:
     # Define a dummy replacement function for Gooey to stay compatible with command-line usage
     class gooey(object):  # pragma: no cover
+        @staticmethod
         def Gooey(func):
             return func
-    # If --gui was specified, then there's a problem
-    if len(sys.argv) == 1 or '--gui' in sys.argv:  # pragma: no cover
-        print('ERROR: --gui specified but an error happened with lib/gooey, cannot load the GUI (however you can still use this script in commandline). Check that lib/gooey exists and that you have wxpython installed. Here is the error: ')
-        raise(exc)
 
 def conditional_decorator(flag, dec):  # pragma: no cover
     def decorate(fn):
@@ -322,11 +327,16 @@ def AutoGooey(fn):  # pragma: no cover
 
 
 @AutoGooey
-def main(argv=None, return_report=False):
+def main(argv=None, return_report=False, regroup=False):
     if argv is None: # if argv is empty, fetch from the commandline
         argv = sys.argv[1:]
     elif isinstance(argv, _str): # else if argv is supplied but it's a simple string, we need to parse it to a list of arguments before handing to argparse or any other argument parser
         argv = shlex.split(argv) # Parse string just like argv using shlex
+
+    # If --gui was specified, then there's a problem
+    if len(argv) == 1 or '--gui' in argv:  # pragma: no cover
+        print(exc)
+        raise Exception('--gui specified but an error happened with lib/gooey, cannot load the GUI (however you can still use this script in commandline). Check that lib/gooey exists and that you have wxpython installed. Here is the error: ')
 
     #==== COMMANDLINE PARSER ====
 
@@ -347,6 +357,10 @@ Advices
 - Python module: this library can be used as a Python module to include in your scripts (just call `main(return_report=True)`).
 
 Note: use --gui (without any other argument) to launch the experimental gui (needs Gooey library).
+
+In addition to the switches provided below, using this program as a Python module also provides 2 additional options:
+ - return_report = True to return as a variable the files matched and the report instead of saving in a file.
+ - regroup = True will return the matched files (if return_report=True) in a structure of nested list/dicts depending on if the groups are named or not. Groups can also avoid being matched by using non-matching groups in regex.
     ''' % __version__
     ep = ''' '''
 
@@ -523,17 +537,18 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
 
     # == FILES WALKING AND MATCHING/SUBSTITUTION STEP
     files_list = []  # "to copy" files list, stores the list of input files and their corresponding output path (computed using regex)
+    files_list_regroup = {}  # files list regrouped, if regroup = True
     ptee.write("Computing paths matching and simulation report, please wait (total time depends on files count - filesize has no influence). Press CTRL+C to abort\n")
     for dirpath, filename in tqdm(recwalk(inputpath, topdown=False), unit='files', leave=True, smoothing=0):
         # Get full absolute filepath and relative filepath from base dir
         filepath = os.path.join(dirpath, filename)
         relfilepath = path2unix(os.path.relpath(filepath, rootfolderpath)) # File relative path from the root (we truncate the rootfolderpath so that we can easily check the files later even if the absolute path is different)
+        regin_match = regin.search(relfilepath)
         # Check if relative filepath matches the input regex
-        if regin.search(relfilepath):  # Matched! We store it in the "to copy" files list
+        if regin_match:  # Matched! We store it in the "to copy" files list
             # If range mode enabled, check if the numbers in the filepath are in the specified range, else we skip this file
             if path_range:
-                m = regin.search(relfilepath)
-                curval = int(m.group(prange['group']))
+                curval = int(regin_match.group(prange['group']))
                 if not (prange['start'] <= curval <= prange['end']):
                     continue
             # Compute the output filepath using output regex
@@ -549,6 +564,48 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
                 ptee.write("\rMatch: %s %s %s\n" % (relfilepath, "-->" if newfilepath else "", newfilepath if newfilepath else ""))
                 if test_flag:  # Regex test mode: break file walking after the first match
                     break
+            # Store paths in a tree structure based on groups if regroup is enabled
+            if regroup and regin_match.groups():
+                curlevel = files_list_regroup  # current level in the tree
+                parentlevel = curlevel  # parent level in the tree (necessary to modify the leaf, else there is no way to reference by pointer)
+                lastg = 0  # last group key (to access the leaf)
+                gdict = regin_match.groupdict()  # store the named groups, so we can pop as we consume it
+                for g in regin_match.groups():
+                    # For each group
+                    if g is None:
+                        # If group value is empty, just skip (ie, this is an optional group, this allow to specify multiple optional groups and build the tree accordingly)
+                        continue
+                    # Find if the current group value is in a named group, in this case we will also use the key name of the group followed by the value, and remove from dict (so that if there are multiple matching named groups with same value we don't lose them)
+                    k, v, gdict = pop_first_namedgroup(gdict, g)
+                    # If a named group is found, use the key followed by value as nodes
+                    if k:
+                        if not k in curlevel:
+                            # Create node for group key/name
+                            curlevel[k] = {}
+                        if not g in curlevel[k]:
+                            # Create subnode for group value
+                            curlevel[k][g] = {}
+                        # Memorize the parent level
+                        parentlevel = curlevel[k]
+                        lastg = g
+                        # Memorize current level (step down one level for next iteration)
+                        curlevel = curlevel[k][g]
+                    # Else it is an unnamed group, use the value as the node name
+                    else:
+                        if not g in curlevel:
+                            # Create node for group value
+                            curlevel[g] = {}
+                        # Memorize the parent level
+                        parentlevel = curlevel
+                        lastg = g
+                        # Memorize current level (step down one level for next iteration)
+                        curlevel = curlevel[g]
+                # End of tree structure construction
+                # Create the leaf if not done already, as a list
+                if not parentlevel[lastg]:
+                    parentlevel[lastg] = []
+                # Append the value (so if there are multiple files matching the same structure, they will be appended in this list)
+                parentlevel[lastg].append([relfilepath, newfilepath])
     ptee.write("End of simulation. %i files matched." % len(files_list))
     # Regex test mode: just quit after the first match
     if test_flag:
@@ -655,7 +712,10 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
     # == RETURN AND END OF MAIN
     ptee.write("Task done, quitting.")
     if return_report:  # return the matched files and their substitutions if available
-        return files_list, [conflict1_flag, conflict2_flag]
+        if regroup:
+            return files_list_regroup, [conflict1_flag, conflict2_flag]
+        else:
+            return files_list, [conflict1_flag, conflict2_flag]
     else:  # Just return non error code
         return 0
 
