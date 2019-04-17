@@ -360,7 +360,7 @@ Note: use --gui (without any other argument) to launch the experimental gui (nee
 
 In addition to the switches provided below, using this program as a Python module also provides 2 additional options:
  - return_report = True to return as a variable the files matched and the report instead of saving in a file.
- - regroup = True will return the matched files (if return_report=True) in a structure of nested list/dicts depending on if the groups are named or not. Groups can also avoid being matched by using non-matching groups in regex.
+ - regroup = True will return the matched files (if return_report=True) in a tree structure of nested list/dicts depending on if the groups are named or not. Groups can also avoid being matched by using non-matching groups in regex.
     ''' % __version__
     ep = ''' '''
 
