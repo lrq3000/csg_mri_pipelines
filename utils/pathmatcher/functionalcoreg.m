@@ -22,7 +22,7 @@ function functionalcoreg(struct,func,others,mode,modality)
 % OUT:
 % - the voxel-to-world part of the headers of the selected source (func) and others images is modified.
 %__________________________________________________________________________
-% v1.0.3
+% v1.0.4
 % License: MIT License
 % Copyright (C) 2019 Stephen Karl Larroque - Coma Science Group - GIGA-Consciousness - University & Hospital of Liege
 % Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -107,9 +107,10 @@ end %endif
 if strcmp(mode,'mi') | strcmp(mode,'both')
     fprintf('Mutual information coregistration, please wait...\n');
     % Configure coregistration
-    flags2.cost_fun = 'mi';  % ncc works remarkably well, when it works, else it fails very badly...
-    flags2.tol = [0.02, 0.02, 0.02, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001];  % VERY important to get good results, these are defaults from the GUI
-    flags2.fwhm = [3, 3];  % reduce smoothing for more efficient coregistering, since the pre-coregistration normally should have placed the brain quite in the correct spot overall. This greatly enhances results, particularly on brain damaged subjects.
+    flags2.cost_fun = 'ecc';  % ncc works remarkably well, when it works, else it fails very badly... ecc works better on some edge cases than mi and nmi
+    flags2.tol = [0.1, 0.1, 0.02, 0.02, 0.02, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01, 0.001, 0.001, 0.001];  % VERY important to get good results. This defines the amount of displacement tolerated. We start with one single big step allowed, to correct after the pre-coregistration if it somehow failed, and then we use the defaults from SPM GUI with progressively finer steps, repeated 2 times (multistart approach).
+    flags2.fwhm = [1, 1];  % reduce smoothing for more efficient coregistering, since the pre-coregistration normally should have placed the brain quite in the correct spot overall. This greatly enhances results, particularly on brain damaged subjects.
+    flags2.sep = [4 2];  % use [4 2 1] if you want to use a finer grained step at the end at 1mm, this can help to get more precise coregistration in some cases but at the cost of a very longer computing time (given the minimal enhancement, we choose here not to do it by default)
     % Load images
     Vstruct = spm_vol(struct);
     Vfunc = spm_vol(func);
