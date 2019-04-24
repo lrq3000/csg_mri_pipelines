@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.4.1'
+__version__ = '1.5.0'
 
 import argparse
 import os
@@ -50,7 +50,12 @@ import traceback
 import pathmatcher
 
 from collections import OrderedDict
-from itertools import izip_longest, product
+from itertools import izip_longest
+
+# for saving movement parameters as csv
+import numpy as np
+import itertools
+import csv, cStringIO, codecs
 
 try:
     from scandir import walk # use the faster scandir module if available (Python >= 3.5), see https://github.com/benhoyt/scandir
@@ -140,6 +145,36 @@ def is_int(s):
         return True
     except ValueError:
         return False
+
+class UnicodeWriter:
+    """
+    A CSV writer which will write rows to CSV file "f",
+    which is encoded in the given encoding.
+    from https://docs.python.org/2/library/csv.html
+    """
+
+    def __init__(self, f, dialect=csv.excel, encoding="utf-8", **kwds):
+        # Redirect output to a queue
+        self.queue = cStringIO.StringIO()
+        self.writer = csv.writer(self.queue, dialect=dialect, **kwds)
+        self.stream = f
+        self.encoder = codecs.getincrementalencoder(encoding)()
+
+    def writerow(self, row):
+        self.writer.writerow([s.encode("utf-8") if isinstance(s, basestring) else s for s in row])
+        # Fetch UTF-8 output from the queue ...
+        data = self.queue.getvalue()
+        data = data.decode("utf-8")
+        # ... and reencode it into the target encoding
+        data = self.encoder.encode(data)
+        # write to the target stream
+        self.stream.write(data)
+        # empty queue
+        self.queue.truncate(0)
+
+    def writerows(self, rows):
+        for row in rows:
+            self.writerow(row)
 
 
 
@@ -301,12 +336,19 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     os.chdir(os.path.dirname(os.path.abspath(__file__)))  # Change Python current directory before launching MATLAB, this will change the initial dir of MATLAB, this will allow to find the auxiliay functions
     #matlab.cd(rootfolderpath)  # FIXME: Does not work: Change MATLAB's current dir to root of project's folder, will be easier for user to load other images if needed
     try:
-        from mlab.releases import latest_release as matlab
-        from mlab import mlabraw
-        matlab.addpath(filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))  # add current folder to the path to have access to helper .m scripts, this needs to be done before each command call
-        # Nota bene: to add the auxiliary local matlab scripts to be accessible in mlab, we need to do two things: 1. os.chdir() in the local directory before launching mlab, 2. addpath in matlab afterwards (with filepath converted to raw path format). Anything else would raise a bug at some point!
+        import matlab_wrapper
+        # start a Matlab session
+        mlab = matlab_wrapper.MatlabSession()
+        # add current folder to the path to have access to helper .m scripts, this needs to be done before each command call
+        mlab.workspace.addpath(filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))
+        # python-matlab-bridge
+        #mlab.set_variable('curfolder', filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))
+        #mlab.run_code('addpath(curfolder);')
+        # mlab
+        #mlab.addpath(filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))  # add current folder to the path to have access to helper .m scripts, this needs to be done before each command call, alternative for other libraries
+        # Nota bene: to add the auxiliary local matlab scripts to be accessible in mlab, we need to do two things: 1. os.chdir() in the local directory with Python before launching mlab, 2. addpath in matlab afterwards (with filepath converted to raw path format). Anything else would raise a bug at some point!
     except ImportError as exc:
-        print("You need to install https://github.com/ewiger/mlab and to add SPM12 in your MATLAB path to use this script!")
+        print("You need to install https://github.com/mrkrd/matlab_wrapper and to add SPM12 in your MATLAB path to use this script. This code should also be compatible with limited changes with mlabwrap based libraries such as: https://github.com/ewiger/mlab or https://github.com/cpbotha/mlabwrap-purepy or https://github.com/arokem/python-matlab-bridge (the most reliable python-matlab wrapper interface in our experience, but has limited support for graphical interface, but great for debugging since it never fails) .")
         raise(exc)
 
     # == Anatomical files walking
@@ -327,7 +369,9 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         for file in tqdm(anat_list, leave=True, unit='files'):
             if verbose: print("- Processing file: %s" % file)
             try:
-                matlab.spm_auto_reorient(file)
+                mlab.workspace.spm_auto_reorient(file, nout=0)
+                #mlab.run_func('spm_auto_reorient.m', file)  # python-matlab-bridge
+                #matlab.spm_auto_reorient(file)  # alternative for other libraries
             except Exception as exc:
                 print('ERROR: an exception happened while auto-reorienting file %s' % file)
                 print(exc)
@@ -346,8 +390,17 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
             os.chdir(os.path.dirname(file))  # Workaround: Change Python and MATLAB's path to the folder where the anatomical file is, so that user just needs to click on it
             #matlab.spm_image('display', filestr_to_raw(file))  # Convert path to raw string to avoid \0 MATLAB string termination character
             #matlab.spm_orthviews('AddContext')  # add the contextual menu (right-click) with additional options such as intensity histogram equalization  # mlab is not thread-safe, this cannot work because it needs to get the figure handle...
-            matlab.addpath(filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))  # add current folder to the path to have access to helper .m scripts, this needs to be done before each command call
-            matlab.reorienthelper(filestr_to_raw(file))  # combination of the two previous commands in a matlab function so that we workaround the thread issue of the mlab module (which prevents it from managing figures handles)
+            # add current folder to the path to have access to helper .m scripts, this needs to be done before each custom command call
+            mlab.workspace.addpath(filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))
+            # python-matlab-bridge
+            #mlab.set_variable('curfolder', filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))
+            #mlab.run_code('addpath(curfolder);')
+            # combination of the two previous commands in a matlab function so that we workaround the thread issue of the mlab module (which prevents it from managing figures handles)
+            mlab.workspace.reorienthelper(filestr_to_raw(file), nout=0)
+            #mlab.run_func('reorienthelper.m', filestr_to_raw(file))  # python-matlab-bridge, also make sure to change reorienthelper to return an output variable to make the call blocking (else python-matlab-bridge will make the call in a non-blocking fashion)
+            # alternative for other libraries
+            #matlab.addpath(filestr_to_raw(os.path.dirname(os.path.abspath(__file__))))
+            #matlab.reorienthelper(filestr_to_raw(file))
 
     # == CHECK MULTIPLE IMAGES TOGETHER
     print("\n=> STEP3: SIDE-BY-SIDE CHECK MULTIPLE SUBJECTS")
@@ -362,7 +415,9 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
             uchoice = ask_next()  # ask user if we load the next file?
             if uchoice is None: break
             if uchoice == False: continue
-            matlab.spm_check_registration(*files)
+            mlab.workspace.spm_check_registration(*files, nout=0)
+            #mlab.run_func('spm_check_registration.m', *files)  # python-matlab-bridge
+            #matlab.spm_check_registration(*files)  # alternative for other libraries
 
     # DEPRECATED: was too specific for one special case, should be avoided in the general case.
     # == COPY ANATOMICAL TO OTHER CONDITIONS
@@ -451,7 +506,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     print("Functional images will be automatically coregistered to their relative structural image.")
     print("NOTE: if you already did this step and began STEP6 (manual coregistration), then SKIP THIS STEP to avoid losing your manual progress!")
     if ask_step():  # Wait for user to be ready
-        # -- Proceeding to MATLAB checkreg
+        # -- Proceeding to automatic coregistration
         current_image = 0
         # for each key (can be each condition, session, subject, or even a combination of all those and more)
         for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
@@ -484,12 +539,15 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 #if len(im_table[im_key]['func']) == 1:
                 im_func += ',1'
                 # Send to MATLAB checkreg!
-                matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
-                matlab.functionalcoreg(im_anat, im_func, im_func_others)
+                mlab.workspace.functionalcoreg(im_anat, im_func, im_func_others, nout=0)
+                #mlab.run_func('functionalcoreg.m', im_anat, im_func, im_func_others)  # python-matlab-bridge
+                # Alternative for other libraries
+                #matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir (no real reason)
+                #matlab.functionalcoreg(im_anat, im_func, im_func_others)
 
     # == MANUAL COREGISTRATION
     print("\n=> STEP6: MANUAL COREGISTRATION OF FUNCTIONAL IMAGES")
-    print("A randomly selected functional image will now be displayed (bottom) along the corresponding anatomical image (top). Please reorient the functional image to match the anatomical image, and select all functional images to apply the reorientation.")
+    print("The first functional image for each session will now be displayed (bottom) along the corresponding anatomical image (top). Please reorient the functional image to match the anatomical image, and select all functional images to apply the reorientation.")
     print("This step is very important, because the automatic coregistration algorithms are not optimal (they cannot be, the problem is non-linear), and thus they can fall in local optimums. A good manual coregistration ensures the automatic coregistration will be on-the-spot!")
     print("NOTE: you need to right-click on the bottom image, then click on Reorient Images > Current image. Red contours of the bottom functional image will be overlaid on the top anatomical image, and a side menu will open to allow you to reorient the bottom image and apply on other functional images.")
     print("NOTE2: you can also enhance the contrasts by right-clicking on functional image and select Zoom > This image non zero, by setting the number of contours to 2 instead of 3, and by right-clicking on the anatomical image and select Image > Intensity Mapping > local > Equalised squared-histogram (you can also do the same intensity mapping change on the functional image, the contours will adapt according to the greater contrast).")
@@ -538,8 +596,14 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     #if len(im_table[im_key]['func']) == 1:
                     im_func += ',1'
                     # Send to MATLAB checkreg!
-                    matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
-                    matlab.spm_check_registration(im_anat, im_func)
+                    mlab.workspace.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
+                    mlab.workspace.spm_check_registration(im_anat, im_func, nout=0)
+                    # Alternative for python-matlab-bridge
+                    #mlab.run_func('cd.m', os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
+                    #mlab.run_func('spm_check_registration.m', im_anat, im_func)
+                    # Alternative for other libraries
+                    #matlab.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
+                    #matlab.spm_check_registration(im_anat, im_func)
                     # Allow user to select another image if not enough contrast
                     im_func_total = len(funclist) - 1  # total number of functional images
                     uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i), Enter to [c]ontinue to next session or subject: " % (im_func_total), customchoices=['r', 'first', 'last', 'int'])
@@ -558,7 +622,59 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                             select_t2_nb = None
                         print("Number : %i" % select_t2_nb)
 
+    # == MOTION CALCULATIONS
+    print("\n=> STEP7: CALCULATE MOTION PARAMETERS")
+    print("Realignment (without saving) will be applied on the functional images to calculate the motion files (rp_*.txt) and an excel file with the max, min, mean and variance of translation and rotation movement parameters will be saved (this file can then be used to exclude subjects based on motion).")
+
+    if ask_step():  # Wait for user to be ready
+        # -- Proceeding to MATLAB spm_realign
+        # prepare the list to store all movement parameters for each subject/session
+        cols = ['_'.join(x) for x in itertools.product(['diff', 'std', 'mean', 'median', 'mad'], ['translation', 'rotation'], ['x', 'y', 'z'])]
+        mov_list = []
+        mov_list.append(['id', 'session', 'path'] + ['sumdiff_translation', 'sumdiff_rotation'] + cols)
+        current_image = 0
+        # for each key (can be each condition, session, subject, or even a combination of all those and more)
+        for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
+            current_image += 1
+            # check if there is both anatomical and structural images available, if one is missing we simply skip
+            if 'anat' not in im_table[im_key] or 'func' not in im_table[im_key]:
+                continue
+            # prepare the functional images list (there might be multiple folders)
+            if isinstance(im_table[im_key]['func'], dict):
+                # multiple folders
+                funclists = im_table[im_key]['func'].values()
+            else:
+                # only one folder, we simply put it in a list so that we don't break the loop
+                funclists = [im_table[im_key]['func']]
+            # For each functional image subfolder
+            for i, funclist in enumerate(funclists):
+                mlab.workspace.cd(os.path.dirname(os.path.join(rootfolderpath, funclist[0])))  # Change MATLAB current directory to the functional images dir, to ensure output files will be written in same directory (not sure how SPM handles what folder to use)
+                # Compute movement parameters (will also create a rp_*.txt file, but NOT modify the nifti files headers
+                movement_params = mlab.workspace.realignhelper([os.path.join(rootfolderpath, imf) for imf in funclist])
+                # ALternative for python-matlab-bridge
+                #mlab.run_func('cd.m', os.path.dirname(os.path.join(rootfolderpath, funclist[0])))
+                #mlab.run_func('realignhelper.m', [os.path.join(rootfolderpath, imf) for imf in funclist])
+                # Alternative for other libraries based on mlabwrap
+                #matlab.cd(os.path.dirname(os.path.join(rootfolderpath, funclist[0])))  # Change MATLAB current directory to the functional images dir, to ensure output files will be written in same directory (not sure how SPM handles what folder to use)
+                #matlab.realignhelper([os.path.join(rootfolderpath, imf) for imf in funclist])
+                # Compute statistical metrics to summarize the movement parameters
+                mov_diff = np.max(movement_params, axis=0) - np.min(movement_params, axis=0)
+                mov_sumdiff = [sum(mov_diff[0:3]), sum(mov_diff[3:6])]
+                mov_std = np.std(movement_params, axis=0)
+                mov_mean = np.mean(movement_params, axis=0)
+                mov_median = np.median(movement_params, axis=0)
+                mov_mad = np.median(np.abs(movement_params - np.median(movement_params, axis=0)), axis=0)  # median absolute deviation = median(abs(Xi - median(X)))
+                # Build metadata info (subject name, session, what path, etc)
+                func_metadata = [im_key, i, os.path.dirname(os.path.join(rootfolderpath, funclist[0]))]
+                # Append to our list of movement parameters
+                mov_list.append(func_metadata + mov_sumdiff + mov_diff.tolist() + mov_std.tolist() + mov_mean.tolist() + mov_median.tolist() + mov_mad.tolist())
+        # Save the list as a csv
+        with open(os.path.join(rootfolderpath, 'movement_parameters.csv'), 'wb') as f:
+            csv_handler = UnicodeWriter(f, delimiter=';', quoting=csv.QUOTE_ALL, encoding='utf-8-sig')
+            csv_handler.writerows(mov_list)
+
     # == END: now user must execute the standard preprocessing script
+    #mlab.stop()  # stop Matlab session
     print("\nAll done. You should now use the standard preprocessing script. Quitting.")
     _ = raw_input("Press any key to quit.")  # IMPORTANT: if we don't wait, the last task will be closed because the program is closing!
 
