@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.5.0'
+__version__ = '1.5.2'
 
 import argparse
 import os
@@ -143,7 +143,7 @@ def is_int(s):
     try: 
         int(s)
         return True
-    except ValueError:
+    except (ValueError, TypeError) as exc:
         return False
 
 class UnicodeWriter:
@@ -493,13 +493,28 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
             # Note that no conflict is possible here (no file can overwrite another), because we just append them all.
             # But files that are not meant to be grouped can be grouped in the end, so you need to make sure your regex is correct (can use pathmatcher or --verbose to check).
             if im_type == 'anat' or im_type not in mdict:
-                im_table[im_key][im_type].append(file)
+                im_table[im_key][im_type].append(os.path.join(rootfolderpath, file))
             else:
                 # Named group for func is present, we create a subfolder for each value (so that multiple func folders can be stored)
-                im_table[im_key][im_type][mdict[im_type]].append(file)
+                im_table[im_key][im_type][mdict[im_type]].append(os.path.join(rootfolderpath, file))
 
-    # Precompute total number of elements user will have to process (to show progress bar)
+    # Precompute total number of subjects user will have to process (to show progress bar)
     total_func_images = len(im_table)
+
+    # Expand 4D nifti images (get the volume numbers for them, so that we do not simply consider them as a single image)
+    # for each key (can be each subject)
+    for im_key in tqdm(im_table.keys(), total=total_func_images, leave=True, unit='subjects', desc='4DEXPAND'):
+        # check if there is both anatomical and structural images available, if one is missing we simply skip
+        if 'func' not in im_table[im_key]:
+            continue
+        # prepare the functional images list (there might be multiple folders)
+        if isinstance(im_table[im_key]['func'], dict):
+            # multiple folders
+            for im_key_func in im_table[im_key]['func'].keys():
+                im_table[im_key]['func'][im_key_func] = mlab.workspace.expandhelper(im_table[im_key]['func'][im_key_func])
+        else:
+            # only one folder
+            im_table[im_key]['func'] = mlab.workspace.expandhelper(im_table[im_key]['func'])
 
     # == AUTOMATIC COREGISTRATION
     print("\n=> STEP5: AUTOMATIC COREGISTRATION OF FUNCTIONAL IMAGES")
@@ -508,7 +523,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     if ask_step():  # Wait for user to be ready
         # -- Proceeding to automatic coregistration
         current_image = 0
-        # for each key (can be each condition, session, subject, or even a combination of all those and more)
+        # for each key (for each subject)
         for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
             current_image += 1
             # check if there is both anatomical and structural images available, if one is missing we simply skip
@@ -530,14 +545,10 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 im_anat = im_table[im_key]['anat'][0]  # pick the first T1
                 im_func = funclist[0]  # pick first EPI BOLD, this will be the source
                 im_func_others = funclist[1:]  # pick other functional images, these will be the "others" images that will also be transformed the same as source
-                if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
-                # Build full absolute path for MATLAB
-                im_anat = os.path.join(rootfolderpath, im_anat)
-                im_func = os.path.join(rootfolderpath, im_func)
-                im_func_others = [os.path.join(rootfolderpath, imf) for imf in im_func_others]
+                if verbose: print("- Processing files: %s and %s" % (os.path.relpath(im_anat, rootfolderpath), os.path.relpath(im_func, rootfolderpath)))
                 # Basic support for 4D nifti: select the first image
                 #if len(im_table[im_key]['func']) == 1:
-                im_func += ',1'
+                #im_func += ',1'
                 # Send to MATLAB checkreg!
                 mlab.workspace.functionalcoreg(im_anat, im_func, im_func_others, nout=0)
                 #mlab.run_func('functionalcoreg.m', im_anat, im_func, im_func_others)  # python-matlab-bridge
@@ -555,7 +566,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     if ask_step():  # Wait for user to be ready
         # -- Proceeding to MATLAB checkreg
         current_image = 0
-        # for each key (can be each condition, session, subject, or even a combination of all those and more)
+        # for each key (for each subject)
         for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
             current_image += 1
             # check if there is both anatomical and structural images available, if one is missing we simply skip
@@ -588,13 +599,10 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                         # Randomly choose one anatomical image (there should be only one anyway) and one functional image
                         im_anat = random.choice(im_table[im_key]['anat'])
                         im_func = random.choice(funclist)
-                    if verbose: print("- Processing files: %s and %s" % (im_anat, im_func))
-                    # Build full absolute path for MATLAB
-                    im_anat = os.path.join(rootfolderpath, im_anat)
-                    im_func = os.path.join(rootfolderpath, im_func)
+                    if verbose: print("- Processing files: %s and %s" % (os.path.relpath(im_anat, rootfolderpath), os.path.relpath(im_func, rootfolderpath)))
                     # Basic support for 4D nifti: select the first image
                     #if len(im_table[im_key]['func']) == 1:
-                    im_func += ',1'
+                    #im_func += ',1'
                     # Send to MATLAB checkreg!
                     mlab.workspace.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                     mlab.workspace.spm_check_registration(im_anat, im_func, nout=0)
@@ -648,6 +656,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 funclists = [im_table[im_key]['func']]
             # For each functional image subfolder
             for i, funclist in enumerate(funclists):
+                if verbose: print("- Processing files: %s" % (os.path.relpath(funclist[0], rootfolderpath)))
                 mlab.workspace.cd(os.path.dirname(os.path.join(rootfolderpath, funclist[0])))  # Change MATLAB current directory to the functional images dir, to ensure output files will be written in same directory (not sure how SPM handles what folder to use)
                 # Compute movement parameters (will also create a rp_*.txt file, but NOT modify the nifti files headers
                 movement_params = mlab.workspace.realignhelper([os.path.join(rootfolderpath, imf) for imf in funclist])
