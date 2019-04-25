@@ -3,6 +3,7 @@ function outfiles = expandhelper(niftifiles)
 % Given a list of files, automatically detect 4D nifti files and return an expanded list (where each entry = one volume)
 % This script needs SPM in the path (to open nifti files)
 % by Stephen Karl Larroque, 2019, Coma Science Group, GIGA-Consciousness, University & Hospital of Liege
+% v1.0.0
 %
 
 if numel(niftifiles) > 0
