@@ -1,13 +1,24 @@
-function movvis(root_path)
-% movvis(root_path)
+function movvis(root_path, maxelt)
+% movvis(root_path, maxelt)
 % Movement visualization of all subjects after preprocessing with ART
-% Folders tree structure must correspond to conn subjects loader expected structure (Condition/Subject/data/Session/restMotionCorrected/rp_*.txt)
-% v1.2
-% by Stephen Larroque 2016-2017
+% Folders tree structure must correspond to conn subjects loader expected structure (Condition/Subject/data/Session/modality/rp_*.txt), but in fact all subfolders are optional apart from Condition/Subject
+% maxelt allows to select the maximum number of elements to show on the same plot (the rest will be shown after pressing a key in the console)
+%
+% v1.4
+% by Stephen Larroque 2016-2019
 % License MIT
 
 close all;
 
+if nargin < 1
+    error('No root_path provided, please provide the path to a directory containing your data (in the near BIDS-like structure: Condition/Subject/data/Session/modality/rp_*.txt), but in fact all subfolders are optional apart from Condition/Subject');
+end
+
+if nargin < 2 || isempty(maxelt)
+    maxelt = 25;  % by default we will show up to 25 plots on the same screen
+end
+
+% PREPARE DATA TO VISUALIZE
 % Single file mode, we show the graph for only this file
 if exist(root_path, 'file') == 2
     fprintf('Loading realign movement file of one subject: %s\n', root_path);
@@ -44,9 +55,15 @@ else
 
             % For each session
             sessions = get_dirnames(datapath);
+            if length(sessions) == 0
+                sessions = {'.'};
+            end %endif
             for isess=1:length(sessions)
                 sesspath = fullfile(datapath, sessions{isess});
                 modalities = get_dirnames(sesspath);
+                if length(modalities) == 0
+                    modalities = {'.'};
+                end %endif
                 % check all modalities folders (eg, rest, tennis, etc.)
                 for im=1:length(modalities)
                     % skip mprage and jobs folders
@@ -71,15 +88,34 @@ else
     end
 end
 
-% Compute the number of colums per row (we want to have a square like shape)
 total_files = length(list_files);
-width = ceil(sqrt(total_files));
-height = ceil(total_files / width);
+fprintf('Found %i movement files.\n', total_files);
+if total_files == 0
+    return;
+end %endif
+
+% PLOT
+% Compute the number of colums per row (we want to have a square like shape)
+width = ceil(sqrt(maxelt));
+height = ceil(maxelt / width);
 % Display multiple subjects as subplot on the same figure
 figure(1); suptitle('Translation (in mm)');
 figure(2); suptitle('Rotation (in rad)');
+curelt = 0;  % count where we are at about printing (to stay below maxelt)
 %for s=1:ceil(total_subjects)
 for sid=1:length(list_files)
+    % Check where we stop printing for this batch
+    if curelt >= maxelt
+        fprintf('Please press any key to continue plotting the next batch of subjects.\n');
+        pause;
+        % Reset counter
+        curelt = 0;
+        % Recreate figures
+        close all;
+        figure(1); suptitle('Translation (in mm)');
+        figure(2); suptitle('Rotation (in rad)');
+    end %endif
+
     % Load ART movement data
     mov_data = importdata(list_files{sid}.file);
 
@@ -87,7 +123,7 @@ for sid=1:length(list_files)
     figure(1);
     %i = 1 + floor(s / width);
     %j = mod(s, width);
-    subplot(height, width, sid);
+    subplot(height, width, mod(sid-1,maxelt)+1 );
     plot(mov_data(:,1:3)); % x, y, z translation in mm
     xlabel('Volume number');
     ylabel('mm');
@@ -95,11 +131,14 @@ for sid=1:length(list_files)
 
     % Plot rotation (tx, ty, tz in radians)
     figure(2);
-    subplot(height, width, sid);
+    subplot(height, width, mod(sid-1,maxelt)+1 );
     plot(mov_data(:,4:6)); % tx, ty, tz rotation in radians
     xlabel('Volume number');
     ylabel('rad');
     title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session ' mod ' list_files{sid}.modality]);
+
+    % Update counter
+    curelt = curelt + 1;
 end
 
 % Set one legend for all the subplots, and place it outside the last subplot (because the subplots will probably be small, with the legend over it would be impossible to see anything)
