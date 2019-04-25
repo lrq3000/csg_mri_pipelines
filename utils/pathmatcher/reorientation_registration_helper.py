@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.5.2'
+__version__ = '1.5.3'
 
 import argparse
 import os
@@ -511,10 +511,16 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         if isinstance(im_table[im_key]['func'], dict):
             # multiple folders
             for im_key_func in im_table[im_key]['func'].keys():
-                im_table[im_key]['func'][im_key_func] = mlab.workspace.expandhelper(im_table[im_key]['func'][im_key_func])
+                im_table[im_key]['func'][im_key_func] = mlab.workspace.expandhelper(im_table[im_key]['func'][im_key_func]).tolist()
+                if isinstance(im_table[im_key]['func'][im_key_func], basestring):
+                    # If there is only one file, matlab will return a char, thus a string, so we need to convert back to a list to be consistent
+                    im_table[im_key]['func'][im_key_func] = [im_table[im_key]['func'][im_key_func]]
         else:
             # only one folder
-            im_table[im_key]['func'] = mlab.workspace.expandhelper(im_table[im_key]['func'])
+            im_table[im_key]['func'] = mlab.workspace.expandhelper(im_table[im_key]['func']).tolist()
+            if isinstance(im_table[im_key]['func'], basestring):
+                # If there is only one file, matlab will return a char, thus a string, so we need to convert back to a list to be consistent
+                im_table[im_key]['func'] = [im_table[im_key]['func']]
 
     # == AUTOMATIC COREGISTRATION
     print("\n=> STEP5: AUTOMATIC COREGISTRATION OF FUNCTIONAL IMAGES")
@@ -656,6 +662,9 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 funclists = [im_table[im_key]['func']]
             # For each functional image subfolder
             for i, funclist in enumerate(funclists):
+                if len(funclist) == 1:
+                    # If there is only one image, we cannot compute motion, so just skip
+                    continue
                 if verbose: print("- Processing files: %s" % (os.path.relpath(funclist[0], rootfolderpath)))
                 mlab.workspace.cd(os.path.dirname(os.path.join(rootfolderpath, funclist[0])))  # Change MATLAB current directory to the functional images dir, to ensure output files will be written in same directory (not sure how SPM handles what folder to use)
                 # Compute movement parameters (will also create a rp_*.txt file, but NOT modify the nifti files headers
