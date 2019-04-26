@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.5.5'
+__version__ = '1.5.6'
 
 import argparse
 import os
@@ -115,11 +115,13 @@ def ask_next(filepath='', msg=None, customchoices=[]):
             print("Incorrect entry. Please type one of the proposed choices.")
 
 def str_to_raw(str):
-    '''Convert string received from commandline to raw (unescaping the string)'''
-    try:  # Python 2
-        return str.decode('string_escape')
-    except:  # Python 3
-        return str.encode().decode('unicode_escape')
+    '''Convert string received from commandline to raw (unescaping the string, turning it into a literal)'''
+    return repr(str)
+    # Old method, which failed on string containing "\0" by converting them to a null byte when it was in fact part of the path
+    #try:  # Python 2
+    #    return str.decode('string_escape')
+    #except:  # Python 3
+    #    return str.encode().decode('unicode_escape').replace("'", "\\'")
 
 def filestr_to_raw(str):
     '''Convert a filepath to raw string only if resulting filepath exist
@@ -323,7 +325,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     print("\n")
 
     # == Prepare list of conditions and string template vars
-    conditions_list = next(os.walk(rootfolderpath))[1]
+    conditions_list = next(walk(rootfolderpath))[1]
     conditions_list.sort()  # Make sure the folders order is the same every time we launch the application, in order for the user to be able to restart and skip steps and still work on the same files
     template_vars = {'inputpath': rootfolderpath,
                      'firstcond': conditions_list[0],
