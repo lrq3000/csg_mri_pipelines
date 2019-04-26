@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.5.6'
+__version__ = '1.5.8'
 
 import argparse
 import os
@@ -513,26 +513,30 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         if isinstance(im_table[im_key]['func'], dict):
             # multiple folders
             for im_key_func in im_table[im_key]['func'].keys():
-                im_table[im_key]['func'][im_key_func] = mlab.workspace.expandhelper(im_table[im_key]['func'][im_key_func]).tolist()
-                if isinstance(im_table[im_key]['func'][im_key_func], basestring):
+                if not 'func_expanded' in im_table[im_key]:
+                    im_table[im_key]['func_expanded'] = {}
+                im_table[im_key]['func_expanded'][im_key_func] = mlab.workspace.expandhelper(im_table[im_key]['func'][im_key_func]).tolist()
+                if isinstance(im_table[im_key]['func_expanded'][im_key_func], basestring):
                     # If there is only one file, matlab will return a char, thus a string, so we need to convert back to a list to be consistent
-                    im_table[im_key]['func'][im_key_func] = [im_table[im_key]['func'][im_key_func]]
+                    im_table[im_key]['func_expanded'][im_key_func] = [im_table[im_key]['func_expanded'][im_key_func]]
                 # Remove the anatomical file if the provided functional regular expression is also matching the anatomical files (this would still work but it defeats the purpose of doing the reorientation steps before...)
                 if 'anat' in im_table[im_key]:
                     try:
                         im_table[im_key]['func'][im_key_func].remove(im_table[im_key]['anat'][0])
+                        im_table[im_key]['func_expanded'][im_key_func].remove(im_table[im_key]['anat'][0])
                     except ValueError as exc:
                         pass
         else:
             # only one folder
-            im_table[im_key]['func'] = mlab.workspace.expandhelper(im_table[im_key]['func']).tolist()
-            if isinstance(im_table[im_key]['func'], basestring):
+            im_table[im_key]['func_expanded'] = mlab.workspace.expandhelper(im_table[im_key]['func']).tolist()
+            if isinstance(im_table[im_key]['func_expanded'], basestring):
                 # If there is only one file, matlab will return a char, thus a string, so we need to convert back to a list to be consistent
-                im_table[im_key]['func'] = [im_table[im_key]['func']]
+                im_table[im_key]['func_expanded'] = [im_table[im_key]['func_expanded']]
             # Remove the anatomical file if the provided functional regular expression is also matching the anatomical files (this would still work but it defeats the purpose of doing the reorientation steps before...)
             if 'anat' in im_table[im_key]:
                 try:
                     im_table[im_key]['func'].remove(im_table[im_key]['anat'][0])
+                    im_table[im_key]['func_expanded'].remove(im_table[im_key]['anat'][0])
                 except ValueError as exc:
                     pass
 
@@ -564,11 +568,15 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 # Pick the image
                 im_anat = im_table[im_key]['anat'][0]  # pick the first T1
                 im_func = funclist[0]  # pick first EPI BOLD, this will be the source
-                im_func_others = funclist[1:]  # pick other functional images, these will be the "others" images that will also be transformed the same as source
+                if len(funclist) > 1:
+                    im_func_others = funclist[1:]  # pick other functional images, these will be the "others" images that will also be transformed the same as source
+                else:
+                    # 4D nifti support: there might be only one nifti file
+                    im_func_others = []
                 if verbose: print("- Processing files: %s and %s" % (os.path.relpath(im_anat, rootfolderpath), os.path.relpath(im_func, rootfolderpath)))
-                # Basic support for 4D nifti: select the first image
-                #if len(im_table[im_key]['func']) == 1:
-                #im_func += ',1'
+                # Support for 4D nifti: select the first volume of the functional image that will be used as the source for coregistration
+                # Also we do not use the expanded functional images list, since there is only one header for all volumes in a 4D nifti, we need to apply the coregistration translation on only the first volume, this will be propagated to all others
+                im_func += ',1'
                 # Send to MATLAB checkreg!
                 mlab.workspace.functionalcoreg(im_anat, im_func, im_func_others, nout=0)
                 #mlab.run_func('functionalcoreg.m', im_anat, im_func, im_func_others)  # python-matlab-bridge
@@ -590,15 +598,15 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
             current_image += 1
             # check if there is both anatomical and structural images available, if one is missing we simply skip
-            if 'anat' not in im_table[im_key] or 'func' not in im_table[im_key]:
+            if 'anat' not in im_table[im_key] or 'func_expanded' not in im_table[im_key]:
                 continue
             # prepare the functional images list (there might be multiple folders)
-            if isinstance(im_table[im_key]['func'], dict):
+            if isinstance(im_table[im_key]['func_expanded'], dict):
                 # multiple folders
-                funclists = im_table[im_key]['func'].values()
+                funclists = im_table[im_key]['func_expanded'].values()
             else:
                 # only one folder, we simply put it in a list so that we don't break the loop
-                funclists = [im_table[im_key]['func']]
+                funclists = [im_table[im_key]['func_expanded']]
             # For each functional image subfolder
             for i, funclist in enumerate(funclists):
                 # Wait for user to be ready
@@ -626,6 +634,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     # Send to MATLAB checkreg!
                     mlab.workspace.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                     mlab.workspace.spm_check_registration(im_anat, im_func, nout=0)
+                    mlab.workspace.spm_orthviews('reorient','context_init',[2], nout=0);
                     # Alternative for python-matlab-bridge
                     #mlab.run_func('cd.m', os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                     #mlab.run_func('spm_check_registration.m', im_anat, im_func)
@@ -665,15 +674,15 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
             current_image += 1
             # check if there is both anatomical and structural images available, if one is missing we simply skip
-            if 'anat' not in im_table[im_key] or 'func' not in im_table[im_key]:
+            if 'anat' not in im_table[im_key] or 'func_expanded' not in im_table[im_key]:
                 continue
             # prepare the functional images list (there might be multiple folders)
-            if isinstance(im_table[im_key]['func'], dict):
+            if isinstance(im_table[im_key]['func_expanded'], dict):
                 # multiple folders
-                funclists = im_table[im_key]['func'].values()
+                funclists = im_table[im_key]['func_expanded'].values()
             else:
                 # only one folder, we simply put it in a list so that we don't break the loop
-                funclists = [im_table[im_key]['func']]
+                funclists = [im_table[im_key]['func_expanded']]
             # For each functional image subfolder
             for i, funclist in enumerate(funclists):
                 if len(funclist) == 1:
