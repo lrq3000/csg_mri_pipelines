@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.5.4'
+__version__ = '1.5.5'
 
 import argparse
 import os
@@ -517,7 +517,10 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     im_table[im_key]['func'][im_key_func] = [im_table[im_key]['func'][im_key_func]]
                 # Remove the anatomical file if the provided functional regular expression is also matching the anatomical files (this would still work but it defeats the purpose of doing the reorientation steps before...)
                 if 'anat' in im_table[im_key]:
-                    im_table[im_key]['func'][im_key_func].remove(im_table[im_key]['anat'][0])
+                    try:
+                        im_table[im_key]['func'][im_key_func].remove(im_table[im_key]['anat'][0])
+                    except ValueError as exc:
+                        pass
         else:
             # only one folder
             im_table[im_key]['func'] = mlab.workspace.expandhelper(im_table[im_key]['func']).tolist()
@@ -526,7 +529,10 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 im_table[im_key]['func'] = [im_table[im_key]['func']]
             # Remove the anatomical file if the provided functional regular expression is also matching the anatomical files (this would still work but it defeats the purpose of doing the reorientation steps before...)
             if 'anat' in im_table[im_key]:
-                im_table[im_key]['func'].remove(im_table[im_key]['anat'][0])
+                try:
+                    im_table[im_key]['func'].remove(im_table[im_key]['anat'][0])
+                except ValueError as exc:
+                    pass
 
     # == AUTOMATIC COREGISTRATION
     print("\n=> STEP5: AUTOMATIC COREGISTRATION OF FUNCTIONAL IMAGES")
