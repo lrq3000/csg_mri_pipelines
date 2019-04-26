@@ -634,7 +634,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     # Send to MATLAB checkreg!
                     mlab.workspace.cd(os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                     mlab.workspace.spm_check_registration(im_anat, im_func, nout=0)
-                    mlab.workspace.spm_orthviews('reorient','context_init',[2], nout=0);
+                    mlab.workspace.spm_orthviews('reorient','context_init',[2], nout=0)  # directly open the coregistration menu and outlines
                     # Alternative for python-matlab-bridge
                     #mlab.run_func('cd.m', os.path.dirname(im_func))  # Change MATLAB current directory to the functional images dir, so that it will be easy and quick to apply transformation to all other images
                     #mlab.run_func('spm_check_registration.m', im_anat, im_func)
