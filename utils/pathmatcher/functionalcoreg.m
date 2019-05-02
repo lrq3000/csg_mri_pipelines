@@ -16,13 +16,13 @@ function functionalcoreg(struct,func,others,mode,modality)
 % - struct      : filename of the reference structural image
 % - func        : filename of the source functional image (that will be coregistered to structural image). In general, this should be the first BOLD volume (to register to the first volume)
 % - others      : list of filenames of other functional (or other modality) images to coregister with the same transform as the source image (format similar to what `ls` returns)
-% - mode        : coregister using the old 'affine' method, or the new 'mi' Mutual Information method (default) or 'both' (first affine then mi)
+% - mode        : coregister using the old 'affine' method, or the new 'mi' Mutual Information method (default) or 'both' (first affine then mi) or 'minoprecoreg' to skip precoregistration
 % - modality    : modality of the 'func' image, can be any type supported by SPM: 't1', 't2', 'epi', 'pd', 'pet', 'spect'. Default: 'epi'.
 %
 % OUT:
 % - the voxel-to-world part of the headers of the selected source (func) and others images is modified.
 %__________________________________________________________________________
-% v1.0.5
+% v1.0.6
 % License: MIT License
 % Copyright (C) 2019 Stephen Karl Larroque - Coma Science Group - GIGA-Consciousness - University & Hospital of Liege
 % Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -107,7 +107,7 @@ if strcmp(mode,'affine') | strcmp(mode,'both')
 end %endif
 
 % MUTUAL INFORMATION COREGISTRATION
-if strcmp(mode,'mi') | strcmp(mode,'both')
+if strcmp(mode,'mi') | strcmp(mode,'both') | strcmp(mode,'minoprecoreg')
     fprintf('Mutual information coregistration, please wait...\n');
     % Configure coregistration
     flags2.cost_fun = 'ecc';  % ncc works remarkably well, when it works, else it fails very badly, particularly for between-modalities coregistration... ecc works better on some edge cases than mi and nmi for coregistration

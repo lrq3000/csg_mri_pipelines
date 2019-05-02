@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.5.8'
+__version__ = '1.5.9'
 
 import argparse
 import os
@@ -602,15 +602,16 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 continue
             # prepare the functional images list (there might be multiple folders)
             if isinstance(im_table[im_key]['func_expanded'], dict):
-                # multiple folders
-                funclists = im_table[im_key]['func_expanded'].values()
+                # for multiple folders, no change needed
+                funclists = im_table[im_key]['func_expanded']
             else:
                 # only one folder, we simply put it in a list so that we don't break the loop
-                funclists = [im_table[im_key]['func_expanded']]
+                funclists = {'0': im_table[im_key]['func_expanded']}
             # For each functional image subfolder
-            for i, funclist in enumerate(funclists):
+            for i, k in enumerate(funclists.keys()):
+                funclist = funclists[k]
                 # Wait for user to be ready
-                uchoice = ask_next(msg='Open next registration for subject %s session %i? Enter to [c]ontinue, Skip to [n]ext session, [S]kip to next subject, [A]bort: ' % (im_key, i))  # ask user if we load the next file?
+                uchoice = ask_next(msg='Open next registration for subject %s session %s (%i/%i)? Enter to [c]ontinue, Skip to [n]ext session, [S]kip to next subject, [A]bort: ' % (im_key, str(k), i+1, len(funclists)))  # ask user if we load the next file?
                 if uchoice is None: break
                 if uchoice == False: continue
                 select_t2_nb = 0  # for user to specify a specific T2 image, by default the first image (because in general we coregister the first volume on structural)
@@ -643,7 +644,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     #matlab.spm_check_registration(im_anat, im_func)
                     # Allow user to select another image if not enough contrast
                     im_func_total = len(funclist) - 1  # total number of functional images
-                    uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i), Enter to [c]ontinue to next session or subject: " % (im_func_total), customchoices=['r', 'first', 'last', 'int'])
+                    uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i) or [auto]-coregister again, Enter to [c]ontinue to next session or subject: " % (im_func_total), customchoices=['r', 'first', 'last', 'int', 'auto'])
                     if uchoice is True:  # continue if pressed enter or c
                         break
                     elif uchoice == 'r':  # select a random image
@@ -658,6 +659,25 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                         if not (0 <= select_t2_nb <= im_func_total):
                             select_t2_nb = None
                         print("Number : %i" % select_t2_nb)
+                    elif uchoice == 'auto':  # auto-coregister again
+                        print('Auto-coregistering functional on structural, please wait...')
+                        # Sort images
+                        im_table[im_key]['anat'].sort()
+                        funclist.sort()
+                        # Pick the image
+                        im_anat = im_table[im_key]['anat'][0]  # pick the first T1
+                        funclist = im_table[im_key]['func'][k]  # get images from the 'func' list, not 'func_expanded', to support for 4D niftis
+                        im_func = funclist[0]  # pick first EPI BOLD, this will be the source
+                        if len(funclist) > 1:
+                            im_func_others = funclist[1:]  # pick other functional images, these will be the "others" images that will also be transformed the same as source
+                        else:
+                            # 4D nifti support: there might be only one nifti file
+                            im_func_others = []
+                        # Support for 4D nifti: select the first volume of the functional image that will be used as the source for coregistration
+                        # Also we do not use the expanded functional images list, since there is only one header for all volumes in a 4D nifti, we need to apply the coregistration translation on only the first volume, this will be propagated to all others
+                        im_func += ',1'
+                        # Send to MATLAB checkreg!
+                        mlab.workspace.functionalcoreg(im_anat, im_func, im_func_others, 'minoprecoreg', nout=0)
 
     # == MOTION CALCULATIONS
     print("\n=> STEP7: CALCULATE MOTION PARAMETERS")
