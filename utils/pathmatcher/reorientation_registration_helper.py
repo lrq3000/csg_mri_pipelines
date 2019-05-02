@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.5.9'
+__version__ = '1.6.0'
 
 import argparse
 import os
@@ -644,7 +644,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     #matlab.spm_check_registration(im_anat, im_func)
                     # Allow user to select another image if not enough contrast
                     im_func_total = len(funclist) - 1  # total number of functional images
-                    uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i) or [auto]-coregister again, Enter to [c]ontinue to next session or subject: " % (im_func_total), customchoices=['r', 'first', 'last', 'int', 'auto'])
+                    uchoice = ask_next(msg="Not enough contrasts? Want to load another T2 image? [R]andomly select another T2 or [first] or [last] or any number (bounds: 0-%i) or [auto]-coregister again, [autonopre], or Enter to [c]ontinue to next session or subject: " % (im_func_total), customchoices=['r', 'first', 'last', 'int', 'auto', 'autonopre'])
                     if uchoice is True:  # continue if pressed enter or c
                         break
                     elif uchoice == 'r':  # select a random image
@@ -659,7 +659,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                         if not (0 <= select_t2_nb <= im_func_total):
                             select_t2_nb = None
                         print("Number : %i" % select_t2_nb)
-                    elif uchoice == 'auto':  # auto-coregister again
+                    elif uchoice == 'auto' or uchoice == 'autonopre':  # auto-coregister again
                         print('Auto-coregistering functional on structural, please wait...')
                         # Sort images
                         im_table[im_key]['anat'].sort()
@@ -677,7 +677,10 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                         # Also we do not use the expanded functional images list, since there is only one header for all volumes in a 4D nifti, we need to apply the coregistration translation on only the first volume, this will be propagated to all others
                         im_func += ',1'
                         # Send to MATLAB checkreg!
-                        mlab.workspace.functionalcoreg(im_anat, im_func, im_func_others, 'minoprecoreg', nout=0)
+                        if uchoice == 'auto':
+                            mlab.workspace.functionalcoreg(im_anat, im_func, im_func_others, 'mi', nout=0)
+                        else:
+                            mlab.workspace.functionalcoreg(im_anat, im_func, im_func_others, 'minoprecoreg', nout=0)
 
     # == MOTION CALCULATIONS
     print("\n=> STEP7: CALCULATE MOTION PARAMETERS")
