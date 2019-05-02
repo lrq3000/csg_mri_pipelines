@@ -22,7 +22,7 @@ function functionalcoreg(struct,func,others,mode,modality)
 % OUT:
 % - the voxel-to-world part of the headers of the selected source (func) and others images is modified.
 %__________________________________________________________________________
-% v1.0.6
+% v1.0.7
 % License: MIT License
 % Copyright (C) 2019 Stephen Karl Larroque - Coma Science Group - GIGA-Consciousness - University & Hospital of Liege
 % Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -139,7 +139,7 @@ if ~isempty(others)
                 % Apply affine transform
                 N.mat = M*N.mat;
             end %endif
-            if strcmp(mode,'mi') | strcmp(mode,'both')
+            if strcmp(mode,'mi') | strcmp(mode,'both') | strcmp(mode,'minocoreg')
                 % Apply Mutual Information rigid-body transform
                 N.mat = spm_matrix(M_mi)\N.mat;
             end %endif
