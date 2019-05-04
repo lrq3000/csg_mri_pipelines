@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.0'
+__version__ = '1.2.1'
 
 import argparse
 import os
@@ -276,7 +276,7 @@ def pop_first_namedgroup(groupdict, value):
         if v == value:
             groupdict.pop(k)
             return k, v, groupdict
-    return False, v, groupdict
+    return False, value, groupdict
 
 
 
