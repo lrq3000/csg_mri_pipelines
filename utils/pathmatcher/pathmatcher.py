@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.2'
+__version__ = '1.2.3'
 
 import argparse
 import os
@@ -418,6 +418,8 @@ In addition to the switches provided below, using this program as a Python modul
                         help='Show full paths instead of relative paths in the simulation.')
     main_parser.add_argument('-ra', '--range', type=str, metavar='1:10-255', required=False, default=False,
                         help='Range mode: match only the files with filenames containing numbers in the specified range. The format is: (regex-match-group-id):(range-start)-(range-end). regex-match-group-id is the id of the regular expression that will contain the numbers that must be compared to the range. range-end is inclusive.')
+    main_parser.add_argument('-re', '--regex_exists', metavar=r'"newsub/\1"', type=str, required=False, default=None,
+                        help='Regex of output path to check if the matched regex here is matched prior writing output files.', **widget_text)
     main_parser.add_argument('--report', type=str, required=False, default='pathmatcher_report.txt', metavar='pathmatcher_report.txt',
                         help='Where to store the simulation report (default: pwd = current working dir).', **widget_filesave)
     main_parser.add_argument('-l', '--log', metavar='/some/folder/filename.log', type=str, required=False,
@@ -436,6 +438,7 @@ In addition to the switches provided below, using this program as a Python modul
     outputpath = args.output if args.output else None
     regex_input = args.regex_input
     regex_output = args.regex_output
+    regex_exists = args.regex_exists
     copy_mode = args.copy
     symlink_mode = args.symlink
     move_mode = args.move
@@ -511,12 +514,14 @@ In addition to the switches provided below, using this program as a Python modul
     # Directory alias
     regex_input = regex_input.replace('\dir', r'[^\\/]*?')
     regex_output = regex_output.replace('\dir', r'[^\\/]*?') if regex_output else regex_output
+    regex_exists = regex_exists.replace('\dir', r'[^\\/]*?') if regex_exists else regex_exists
 
     #### Main program
     # Test if regular expressions are correct syntactically
     try:
         regin = re.compile(str_to_raw(regex_input))
         regout = re.compile(str_to_raw(regex_output)) if regex_output else None
+        regexist = re.compile(str_to_raw(regex_exists)) if regex_exists else None
         if path_range:  # parse the range format
             temp = re.search(r'(\d+):(\d+)-(\d+)', path_range)
             prange = {"group": int(temp.group(1)), "start": int(temp.group(2)), "end": int(temp.group(3))}
@@ -532,6 +537,7 @@ In addition to the switches provided below, using this program as a Python modul
     ptee.write("- Input regex: %s" % regex_input)
     ptee.write("- Output root: %s" % outputpath)
     ptee.write("- Output regex: %s" % regex_output)
+    ptee.write("- Full arguments: %s" % ' '.join(sys.argv))
     ptee.write("\n")
 
     # == FILES WALKING AND MATCHING/SUBSTITUTION STEP
@@ -557,6 +563,13 @@ In addition to the switches provided below, using this program as a Python modul
             else:
                 newfilepath = None
                 #fulloutpath = None
+            # Check if output path exists (if argument is enabled)
+            if regex_exists and newfilepath:
+                if not os.path.exists(os.path.join(rootoutpath, regin.sub(regex_exists, relfilepath))):
+                    # If not found, skip to the next file
+                    if verbose or test_flag:
+                        ptee.write("\rFile skipped because output does not exist: %s" % newfilepath)
+                    continue
             # Store both paths into the "to copy" list
             files_list.append([relfilepath, newfilepath])
             if verbose or test_flag:  # Regex test mode or verbose: print the match
@@ -638,7 +651,8 @@ In addition to the switches provided below, using this program as a Python modul
         reportfile.write("- Input regex: %s\n" % regex_input)
         reportfile.write("- Output root: %s\n" % outputpath)
         reportfile.write("- Output regex: %s\n" % regex_output)
-        reportfile.write("\n")
+        reportfile.write("- Full arguments: %s" % ' '.join(sys.argv))
+        reportfile.write("\r\n")
         reportfile.write("List of matched files:\n")
         for file_op in files_list:
             conflict1 = False
