@@ -39,7 +39,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.1'
+__version__ = '1.2.2'
 
 import argparse
 import os
@@ -334,8 +334,7 @@ def main(argv=None, return_report=False, regroup=False):
         argv = shlex.split(argv) # Parse string just like argv using shlex
 
     # If --gui was specified, then there's a problem
-    if len(argv) == 1 or '--gui' in argv:  # pragma: no cover
-        print(exc)
+    if len(argv) == 0 or '--gui' in argv:  # pragma: no cover
         raise Exception('--gui specified but an error happened with lib/gooey, cannot load the GUI (however you can still use this script in commandline). Check that lib/gooey exists and that you have wxpython installed. Here is the error: ')
 
     #==== COMMANDLINE PARSER ====
