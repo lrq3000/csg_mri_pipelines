@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.6.0'
+__version__ = '1.6.1'
 
 import argparse
 import os
@@ -654,11 +654,13 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     elif uchoice == 'last':  # select last image
                         select_t2_nb = -1
                     elif is_int(uchoice) and uchoice is not False:  # Select specific image by number
-                        select_t2_nb = int(uchoice)
+                        newchoice = int(uchoice)
                         # Check the number is between bounds, else select a random image
-                        if not (0 <= select_t2_nb <= im_func_total):
-                            select_t2_nb = None
-                        print("Number : %i" % select_t2_nb)
+                        if not (0 <= newchoice <= im_func_total):
+                            print("Warning: Selected volume number is out of bounds, please select another. Fallback to displaying same volume.")
+                        else:
+                            select_t2_nb = newchoice
+                            print("Number : %i" % select_t2_nb)
                     elif uchoice == 'auto' or uchoice == 'autonopre':  # auto-coregister again
                         print('Auto-coregistering functional on structural, please wait...')
                         # Sort images
