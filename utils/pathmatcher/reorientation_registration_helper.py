@@ -36,7 +36,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.6.1'
+__version__ = '1.6.2'
 
 import argparse
 import os
@@ -693,7 +693,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         # prepare the list to store all movement parameters for each subject/session
         cols = ['_'.join(x) for x in itertools.product(['diff', 'std', 'mean', 'median', 'mad'], ['translation', 'rotation'], ['x', 'y', 'z'])]
         mov_list = []
-        mov_list.append(['id', 'session', 'path'] + ['sumdiff_translation', 'sumdiff_rotation'] + cols)
+        mov_list.append(['id', 'session', 'path'] + ['sumdiff_translation', 'sumdiff_rotation'] + ['mad_translation_sum', 'mad_rotation_sum'] + cols)
         current_image = 0
         # for each key (can be each condition, session, subject, or even a combination of all those and more)
         for im_key in tqdm(im_table.keys(), total=total_func_images, initial=current_image, leave=True, unit='subjects'):
@@ -730,10 +730,11 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                 mov_mean = np.mean(movement_params, axis=0)
                 mov_median = np.median(movement_params, axis=0)
                 mov_mad = np.median(np.abs(movement_params - np.median(movement_params, axis=0)), axis=0)  # median absolute deviation = median(abs(Xi - median(X)))
+                mov_madsum = [sum(mov_mad[0:3]), sum(mov_mad[3:6])]
                 # Build metadata info (subject name, session, what path, etc)
                 func_metadata = [im_key, i, os.path.dirname(os.path.join(rootfolderpath, funclist[0]))]
                 # Append to our list of movement parameters
-                mov_list.append(func_metadata + mov_sumdiff + mov_diff.tolist() + mov_std.tolist() + mov_mean.tolist() + mov_median.tolist() + mov_mad.tolist())
+                mov_list.append(func_metadata + mov_sumdiff + mov_madsum + mov_diff.tolist() + mov_std.tolist() + mov_mean.tolist() + mov_median.tolist() + mov_mad.tolist())
         # Save the list as a csv
         with open(os.path.join(rootfolderpath, 'movement_parameters.csv'), 'wb') as f:
             csv_handler = UnicodeWriter(f, delimiter=';', quoting=csv.QUOTE_ALL, encoding='utf-8-sig')
