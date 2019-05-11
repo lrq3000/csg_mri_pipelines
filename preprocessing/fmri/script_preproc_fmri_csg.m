@@ -27,10 +27,10 @@ function script_preproc_fmri_csg()
 % Note: old versions of CAT12 can be downloaded at: http://www.neuro.uni-jena.de/cat12/
 %
 % Stephen Karl Larroque
-% 2016-2018
+% 2016-2019
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2019
-% v2.3.0
+% v2.3.1
 % License: MIT
 %
 % TODO:
@@ -547,12 +547,12 @@ if resizeto3
                 % =====================================================================
                 prepfdata = get_prepfdata(data, isub, isess, script_mode, addprefix);
                 % Detect if 4D, we need to expand
-                rfdata_nbframes = spm_select_get_nbframes(rfdata(1,:));
-                if rfdata_nbframes > 1
-                    rfdata = expand_4d_vols(rfdata);
+                prepfdata_nbframes = spm_select_get_nbframes(prepfdata(1,:));
+                if prepfdata_nbframes > 1
+                    prepfdata = expand_4d_vols(prepfdata);
                 end
                 fclose('all');
-                resize_img(rfdata,[3 3 3],nan(2,3));
+                resize_img(prepfdata,[3 3 3],nan(2,3));
                 % =====================================================================
             end %end for sessions
         end % end for subjects
