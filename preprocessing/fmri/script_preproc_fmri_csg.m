@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2019
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2019
-% v2.3.5
+% v2.3.6
 % License: MIT
 %
 % TODO:
@@ -215,7 +215,7 @@ for c = 1:length(conditions)
                 slice_order_auto{c}{isub}{isess}.slice_order = autores_so;
                 slice_order_auto{c}{isub}{isess}.TR = autores_tr;
                 slice_order_auto{c}{isub}{isess}.nslices = autores_nslices;
-                if isempty(autores_so) || (autores_tr == 0) || (autores_nslices == 0)
+                if (isempty(autores_so) && isempty(slice_order)) || ((autores_tr == 0) && (TR == 0)) || ((autores_nslices == 0) && (nslices == 0))
                     error('Autodetection impossible for this session, cannot proceed further, please either process this session separately or fill manually the EPI parameters!');
                 end
             end
