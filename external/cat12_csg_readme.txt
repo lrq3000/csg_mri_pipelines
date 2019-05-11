@@ -1,2 +1,0 @@
-After placing cat12 folder in your spm12/toolbox folder, please also enable expert gui mode by opening cat_defaults.m and setting cat.extopts.expertgui    = 1;
-This will allow you to open the CAT12 batch files and see all the parameters.

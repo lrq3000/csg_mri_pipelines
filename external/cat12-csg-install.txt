@@ -1,0 +1,3 @@
+After placing cat12 folder in your spm12/toolbox folder, please also enable expert gui mode by opening cat_defaults.m and setting cat.extopts.expertgui    = 1;
+This will allow you to open the CAT12 batch files and see all the parameters.
+If SPM was already launched at least once in the current MATLAB session, please close and reopen a new MATLAB window (and not just SPM) to get the expert options to display (in particular, White Matter Hyperintensities Correction WMHC).
