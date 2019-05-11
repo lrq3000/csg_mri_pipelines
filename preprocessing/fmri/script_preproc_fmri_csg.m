@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2019
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2019
-% v2.3.4
+% v2.3.5
 % License: MIT
 %
 % TODO:

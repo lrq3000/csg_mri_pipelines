@@ -11,9 +11,10 @@ function res=gen_slice_order(nslices, hstep, vstep, slice_order, reverse, unroll
 % by Stephen Larroque from the Coma Science Group, 2017-2019
 % Licensed under MIT.
 %
-% v2.1
+% v2.1.1
 %
 % Notices/Changelog:
+% * v2.1.1 mute display of res
 % * v2.0 -> v2.1 critical bugfix for unroll == true, which prevented any unrolling (and thus scripts depending on interleaved sequences provided wrong slice order)
 % * v1.1 -> v2.0 important fix in TR calculations! Previous calculations were based on wrong assumptions on conventions commonly used for slice order!
 %
@@ -105,9 +106,9 @@ if unroll
         % If number of slices is odd, we have to remove superfluous slice numbers outside of range
         if mod(nslices, 2) == 1
             if multi == 0
-                res = res(res>=1 & res<=nslices)
+                res = res(res>=1 & res<=nslices);
             else
-                fprintf('Unrolled odd number of slices is not implemented with multiband EPI yet.\n')
+                fprintf('Unrolled odd number of slices is not implemented with multiband EPI yet.\n');
             end
         end
     end %endif
