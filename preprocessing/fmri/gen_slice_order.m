@@ -8,12 +8,13 @@ function res=gen_slice_order(nslices, hstep, vstep, slice_order, reverse, unroll
 % tr (in seconds) > 0 will return slice time offsets (in ms, as expected by spm) instead of slice number.
 % slice_ids is optional, you can provide your own custom slice indices with this argument, very useful for multiband with non linear schemes (if this exists?).
 %
-% by Stephen Larroque from the Coma Science Group, 2017
+% by Stephen Larroque from the Coma Science Group, 2017-2019
 % Licensed under MIT.
 %
-% v2.0
+% v2.1
 %
 % Notices/Changelog:
+% * v2.0 -> v2.1 critical bugfix for unroll == true, which prevented any unrolling (and thus scripts depending on interleaved sequences provided wrong slice order)
 % * v1.1 -> v2.0 important fix in TR calculations! Previous calculations were based on wrong assumptions on conventions commonly used for slice order!
 %
 
@@ -86,7 +87,7 @@ end
 
 % Unroll if necessary into one horizontal vector (as required by SPM)
 if unroll
-    if size(unroll, 1) == 1 | size(unroll, 2) == 1
+    if size(res, 1) == 1 | size(res, 2) == 1
         % Do not do anything if it is already a vector
         return;
     else
