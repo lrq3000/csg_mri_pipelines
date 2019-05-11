@@ -9,14 +9,14 @@ function script_preproc_fmri_csg()
 % fmri data using the art toolbox (composite motion measures). According to Alfonso Nieto-Castanon: «It is similar to framewise displacement but not exactly the same ("framewise displacement" converts angular differences to mm by multiplying by a constant factor -projecting to a sphere-, and then sums the 6 individual translation/rotation displacement absolute measures; ART's "composite motion" measure estimates instead the maximum voxel displacement resulting from the combined effect of the individual translation and rotation displacement measures)». Ref: https://www.nitrc.org/forum/forum.php?thread_id=5792&forum_id=398
 %
 % DATA IN root_pth, AKA ROOT DIRECTORY, MUST BE ORGANIZED AS FOLLOWS:
-% /root_pth/<subject_id>/data/<sess_id>/(mprage|rest)/*.(img|hdr|nii) -- Note: mprage for structural MRI, rest for fMRI BOLD EPI
+% /root_pth/<condition>/<subject_id>/data/<sess_id>/(mprage|rest)/*.(img|hdr|nii) -- Note: mprage for structural MRI, rest for fMRI BOLD EPI
 %
 % EXAMPLES:
-% /root_pth/ELIZABETH/data/session1/rest (for the fMRI data)
-% /root_pth/ELIZABETH/data/session1/mprage (for the structural)
+% /root_pth/CONTROLS/ELIZABETH/data/session1/rest/somenifti.nii (for the fMRI data)
+% /root_pth/CONTROLS/ELIZABETH/data/session1/mprage/somenifti.nii (for the structural)
 %
-% IF MULTIPLE SESSIONS SHARE THE SAME MRI, IT IS POSSIBLE TO PLACE mprage ONE LEVEL ABOVE:
-% /root_pth/ELIZABETH/data/mprage
+% IF MULTIPLE SESSIONS SHARE THE SAME STRUCTURAL MRI, IT IS POSSIBLE TO PLACE mprage ONE LEVEL ABOVE:
+% /root_pth/CONTROLS/ELIZABETH/data/mprage/somenifti.nii
 %
 % Note: only raw structural and functional images must be in this tree: if there is any already preprocessed image file, please delete them beforehand! (realigned, smoothed, etc.)
 %
@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2019
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2019
-% v2.3.2
+% v2.3.3
 % License: MIT
 %
 % TODO:
@@ -223,7 +223,7 @@ for c = 1:length(conditions)
     end
 end
 if filescount == 0
-    error('No files detected! Please check that your root_pth is organized according to the required layout: /root_pth/<subject_id>/data/<sess_id>/(mprage|rest)/*.(img|hdr|nii)');
+    error('No files detected! Please check that your root_pth is organized according to the required layout: /root_pth/<condition>/<subject_id>/data/<sess_id>/(mprage|rest)/*.(img|hdr|nii)\nExamples:\n/root_pth/CONTROLS/ELIZABETH/data/session1/rest/somenifti.nii (for the fMRI data)\n/root_pth/CONTROLS/ELIZABETH/data/session1/mprage/somenifti.nii (for the structural) or /root_pth/CONTROLS/ELIZABETH/data/mprage/somenifti.nii (for shared structural for all functional sessions)');
 end
 
 % Preprocessing Jobs preparation loop!
