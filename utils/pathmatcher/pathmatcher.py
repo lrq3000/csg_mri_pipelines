@@ -33,13 +33,12 @@
 #
 #
 # TODO:
-# * optimization: re.sub inputpath directly on list of all files in a folder?
-# * Modify recwalk to include regin and regout, and match directly all files in a folder and substitute. Also, stop if folder match and return it (to copy the whole folder directly instead of per file). See http://stackoverflow.com/questions/120656/directory-listing-in-python
+# * optimization: re.sub inputpath directly on list of all files in a folder? Modify recwalk to include regin and regout, and match directly all files in a folder and substitute. Also, stop if folder match and return it (to copy the whole folder directly instead of per file). See http://stackoverflow.com/questions/120656/directory-listing-in-python
 #
 
 from __future__ import print_function
 
-__version__ = '1.2.3'
+__version__ = '1.2.4'
 
 import argparse
 import os
@@ -389,7 +388,7 @@ In addition to the switches provided below, using this program as a Python modul
     main_parser.add_argument('-i', '--input', metavar='/some/path', type=str, required=True,
                         help='Path to the input folder', **widget_dir)
     main_parser.add_argument('-ri', '--regex_input', metavar=r'"sub[^/]+/(\d+)"', type=str, required=True,
-                        help=r'Regex to match input paths. Must be defined relatively from --input folder. Do not forget to enclose it in double quotes (and not single)! To match any directory, use [^/\]*? or the alias \dir.', **widget_text)
+                        help=r'Regex to match input paths. Must be defined relatively from --input folder. Do not forget to enclose it in double quotes (and not single)! To match any directory, use [^/\]*? or the alias \dir, or \dirnodot if you want to match folders in combination with --dir switch.', **widget_text)
 
     # Optional output/copy mode
     main_parser.add_argument('-o', '--output', metavar='/new/path', type=str, required=False, default=None,
@@ -410,6 +409,8 @@ In addition to the switches provided below, using this program as a Python modul
     # Optional general arguments
     main_parser.add_argument('-t', '--test', action='store_true', required=False, default=False,
                         help='Regex test mode: Stop after the first matched file and show the result of substitution. Useful to quickly check if the regex patterns are ok.')
+    main_parser.add_argument('--dir', action='store_true', required=False, default=False,
+                        help='Match directories too? (else only files are matched)')
     main_parser.add_argument('-y', '--yes', action='store_true', required=False, default=False,
                         help='Automatically accept the simulation and apply changes (good for batch processing and command chaining).')
     main_parser.add_argument('-f', '--force', action='store_true', required=False, default=False,
@@ -445,6 +446,7 @@ In addition to the switches provided below, using this program as a Python modul
     movefast_mode = args.move_fast
     delete_mode = args.delete
     test_flag = args.test
+    dir_flag = args.dir
     yes_flag = args.yes
     force = args.force
     only_missing = not force
@@ -512,9 +514,9 @@ In addition to the switches provided below, using this program as a Python modul
     
     # -- Preprocess regular expression to add aliases
     # Directory alias
-    regex_input = regex_input.replace('\dir', r'[^\\/]*?')
-    regex_output = regex_output.replace('\dir', r'[^\\/]*?') if regex_output else regex_output
-    regex_exists = regex_exists.replace('\dir', r'[^\\/]*?') if regex_exists else regex_exists
+    regex_input = regex_input.replace('\dirnodot', r'[^\\/.]*?').replace('\dir', r'[^\\/]*?')
+    regex_output = regex_output.replace('\dirnodot', r'[^\\/.]*?').replace('\dir', r'[^\\/]*?') if regex_output else regex_output
+    regex_exists = regex_exists.replace('\dirnodot', r'[^\\/.]*?').replace('\dir', r'[^\\/]*?') if regex_exists else regex_exists
 
     #### Main program
     # Test if regular expressions are correct syntactically
@@ -544,7 +546,7 @@ In addition to the switches provided below, using this program as a Python modul
     files_list = []  # "to copy" files list, stores the list of input files and their corresponding output path (computed using regex)
     files_list_regroup = {}  # files list regrouped, if regroup = True
     ptee.write("Computing paths matching and simulation report, please wait (total time depends on files count - filesize has no influence). Press CTRL+C to abort\n")
-    for dirpath, filename in tqdm(recwalk(inputpath, topdown=False), unit='files', leave=True, smoothing=0):
+    for dirpath, filename in tqdm(recwalk(inputpath, topdown=False, folders=dir_flag), unit='files', leave=True, smoothing=0):
         # Get full absolute filepath and relative filepath from base dir
         filepath = os.path.join(dirpath, filename)
         relfilepath = path2unix(os.path.relpath(filepath, rootfolderpath)) # File relative path from the root (we truncate the rootfolderpath so that we can easily check the files later even if the absolute path is different)
