@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2019
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2019
-% v2.3.6
+% v2.3.7
 % License: MIT
 %
 % TODO:
@@ -96,6 +96,7 @@ realignunwarp = false;
 ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization, 'subj' for the average of subjects (might be incompatible with CAT12 as it is not offered on the GUI)
 % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12)
 cat12_spm_preproc_accuracy = 0.5; % Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases - from script's author's own tests, there is not much visible difference).
+cat12_shooting_method = 0.5; % use 0.5 for the default "Optimized Shooting - standard" in the template resolution (TR), but if you get an issue with some brain damaged patient (shooting failed), then use 'eps' for the "Optimized Shooting - fast" in the template resolution too, which should fix the issue for these subjects.
 
 % DO NOT TOUCH (unless you use a newer version than SPM12 or if the batch files were renamed)
 if script_mode == 0 % for SPM8+VBM8
@@ -470,7 +471,7 @@ for c = 1:length(conditions)
                     %matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {fullfile(path_to_spm, path_to_dartel_template)};
                     % Dartel shooting template
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {fullfile(path_to_spm, path_to_shooting_template)};
-                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = 0.5;
+                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = cat12_shooting_method;
                     % SPM preprocessing accuracy
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.accstr = cat12_spm_preproc_accuracy;
                 elseif script_mode == 1
