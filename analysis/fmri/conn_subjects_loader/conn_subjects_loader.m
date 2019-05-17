@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h, conn16b, conn17f and conn18a on data preprocessed with VBM8, CAT12, SPM12 OldSeg and with raw data not preprocessed (in this case, set loading_mode to 0)
-% v1.1.2
+% v1.1.3
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016-2019 Stephen Karl Larroque
@@ -148,6 +148,7 @@ for g=1:length(groups)
         % Find the sessions
         sessions = get_dirnames(fullfile(spath, 'data'));
         sessions = sessions(~strcmp(sessions, 'mprage')); % exclude mprage (shared structural folder)
+        if length(sessions) == 0, sessions = {'.'}; end % hierarchy tolerance (ie, if folders do not exist at this level, just stay here and try to continue)
 
         for sessid=1:length(sessions)
             % Print status
