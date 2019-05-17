@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h, conn16b, conn17f and conn18a on data preprocessed with VBM8, CAT12, SPM12 OldSeg and with raw data not preprocessed (in this case, set loading_mode to 0)
-% v1.1.0
+% v1.1.2
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016-2019 Stephen Karl Larroque
@@ -32,6 +32,7 @@ function conn_subjects_loader()
 % * save an example CONN_x into .mat to show the expected structure (useful if need to debug).
 % * support BIDS format
 % * Implement modification/updating of previous CONN projects by using conn_batch (eg, conn_batch('Setup.functionals',myfiles);) instead of first creating a struct (which always overwrites the whole project). See http://www.nitrc.org/forum/forum.php?thread_id=7382&forum_id=1144
+% * add erosion for struct_additional_rois when/if it gets implemented for all rois (and not just for GM/WM/CSF as is currently the case)
 %
 % TIPS:
 % * After the CONN project loads, make sure to:
@@ -44,6 +45,7 @@ function conn_subjects_loader()
 %
 
 % ------ PARAMETERS HERE
+% -- General parameters
 TR = 2.46;  % can also input a vector if your subjects have different TR, eg: [ 2.0 2.15*ones(1, 14) 2.15*ones(1, 13) ]
 conn_file = fullfile(pwd, 'conn_project_1');  % where to store the temporary project file that will be used to load the subjects into CONN (by default in the same folder as where the commandline is run)
 conn_ver = 18; % Put here the CONN version you use (just the number, not the letter)
@@ -51,15 +53,21 @@ root_path = 'X:\Path\To\Data'; % Where your neuroimaging data is located in the 
 path_to_spm = 'C:\matlab_tools\spm12';
 path_to_conn = 'C:\matlab_tools\conn18b'; % avoid CONN16a and prefer CONN16b or even CONN17f, as CONN16a gives weird results (and sanity checks for DMN do not pass)
 path_to_roi_maps = ''; % Path to your ROIs maps, extracted by MarsBars or whatever software... Can be left empty if you want to setup them yourself. If filled, the folder is expected to contain one ROI per .nii file. Each filename will serve as the ROI name in CONN. This script only supports ROI for all subjects (not one ROI per subject, nor one ROI per session, but you can modify the script, these features are supported by CONN).
-loading_mode = 0; % loading mode: raw files (0) or already preprocessed (1)? If 0 (raw files), the prefixes below won't be used
+loading_mode = 0; % loading mode: raw files (0) or already preprocessed (1)? If 0 (raw files), the prefixes below won't be used, and you will need to run CONN Preprocessing before proceeding to analysis.
+
+% -- Mode 1 parameters (already preprocessed dataset)
+% These parameters will be used only if you set loading_mode = 1
 func_smoothed_prefix = 's10wa'; % prefix of the functional images you want to use (generally the smoothed motion corrected functional images). Use: s8rwa for VBM8, s8wra for SPM12 OldSeg, s8wra for CAT12.
 roiextract_type = 1; % extract ROI from what kind of functional images? 1: smoothed images (same files as for the rest of the analysis) ; 2: raw images by stripping the SPM smoothing prefix 's' ; 3: raw images by stripping the smoothing prefix specified above ; 4: other files (NOT SUPPORTED in this script yet). Why use 2 or 3? From CONN's manual, it is a standard good practice advised by CONN: smoothed data for voxel-level descriptions (because this increases the reliability of the resulting connectivity measures), but use if possible the non-smoothed data for ROI-level descriptions (because this decreases potential 'spillage' of the BOLD signal from nearby areas/ROIs). If empty, we will reuse the smoothed images for ROI-level descriptions.
-struct_norm_prefix = 'wm'; % prefix for the (MNI) normalized structural image. Use: wmr for VBM8, wm for SPM12 OldSeg, wm (non-segmented) or wp0 (segmented) for CAT12.
+struct_norm_prefix = 'wm[^i]'; % prefix for the (MNI) normalized structural image. Use: wmr for VBM8, wm for SPM12 OldSeg, wm (non-segmented) or wp0 (segmented) for CAT12.
 struct_segmented_grey_prefix = 'wc1'; % prefix for segmented structural grey matter. Use: m0wrp1 for VBM8, wc1 for SPM12 OldSeg, wp1 (non-modulated) or mwp1 (modulated) for CAT12.
 struct_segmented_white_prefix = 'wc2'; % idem for white matter. Use wc2 for SPM12 OldSeg.
 struct_segmented_csf_prefix = 'wc3'; % idem for csf. Use wc3 for SPM12 OldSeg.
+struct_additional_rois = struct(); % provide additional structural rois to regress out the noise from these rois signal, eg, lesions masks such as WMHC automatic segmentation in CAT12: struct('wmhc', '^wp7.*\.(img|nii)$');
 nb_first_volumes_to_remove = 0; % NOT READY, DO NOT USE! % number of functional volumes to remove, to reduce the fMRI coil calibration bias at the start of the acquisition (ie, the fMRI scanner needs an exponentially decreasing time to calibrate at the beginning, generally 3-4 volumes). Set 0 to disable. NOTE: works only with multi-files nifti *.img/*.hdr (NOT with 4D nifti yet!).
 firstlevelcovars = struct() % regular expressions to match .txt files in the same folder as the functional images and which will be used as 1st-level covariates. The fieldname is used as the covariate name, the value is the regex to match files. Eg, struct('movement', '^art_regression_outliers_and_movement_*.+)?\.mat$');
+
+% -- Additional general parameters
 automate = 0; % if 1, automate the processing (ie, launch the whole processing without showing the GUI until the end to show the results)
 resume_job = 0; % resume from where the script was last stopped (ctrl-c or error). Warning: if you here change parameters of already done steps, they wont take effect! Only parameters of not already done steps will be accounted. Note that resume can also be used to add new subjects without reprocessing old ones.
 run_dynamicfc = 0; % run Dynamic Functional Connectivity analysis? BEWARE: it may fail. This script tries to setup the experiment correctly so that DFC runs, but it may still fail for no obvious reason!
@@ -190,6 +198,15 @@ for g=1:length(groups)
                 session.files.roi.grey = check_exist(regex_files(structpath, ['^' struct_segmented_grey_prefix '.+\.(img|nii)$']));
                 session.files.roi.white = check_exist(regex_files(structpath, ['^' struct_segmented_white_prefix '.+\.(img|nii)$']));
                 session.files.roi.csf = check_exist(regex_files(structpath, ['^' struct_segmented_csf_prefix '.+\.(img|nii)$']));
+                if numel(fieldnames(struct_additional_rois)) > 0
+                    % Load additional structural rois to regress (such as lesion maps)
+                    roikeys = fieldnames(struct_additional_rois);
+                    for ri=1:numel(roikeys)
+                        rkey = roikeys{ri};
+                        rreg = getfield(struct_additional_rois, rkey);
+                        session.files.roi.(rkey) =  check_exist(regex_files(structpath, rreg));
+                    end %endfor
+                end
             end
 
             % 1st-level covariates
@@ -201,8 +218,8 @@ for g=1:length(groups)
             if numel(fieldnames(firstlevelcovars)) > 0
                 % Load all first level covariates
                 flckeys = fieldnames(firstlevelcovars);
-                for fi=1:numel(flckeys)
-                    fkey = flckeys{fi};
+                for fidx=1:numel(flckeys)
+                    fkey = flckeys{fidx};
                     freg = getfield(firstlevelcovars, fkey);
                     session.files.covars1.(fkey) =  check_exist(regex_files(funcmotpath, freg));
                 end %endfor
@@ -255,7 +272,7 @@ for g=1:length(data.groups)
         for sessid=1:length(data.groups{g}.subjects{s}.sessions)
             subjfile = data.groups{g}.subjects{s}.sessions{sessid}.files;
             if isempty(subjfile.struct); error('No structural image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
-            if iscell(subjfile.struct) && (numel(subjfile.struct) > 1); error('Multiple structural image found for group %s subject %s session %s. Need only one structural per subject and session. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
+            if iscell(subjfile.struct) && (numel(subjfile.struct) > 1); error('Multiple structural image found for group %s subject %s session %s. Need only one structural per subject and session. Please check your dataset structure. Here is the list:\n%s', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id, subjfile.struct{:}); end;
             if isempty(subjfile.func); error('No functional image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
             if loading_mode == 1
                 if isempty(subjfile.roi.grey); error('No segmented grey matter image found for group %s subject %s session %s. Please check your dataset structure.', data.groups{g}.id, data.groups{g}.subjects{s}.id, data.groups{g}.subjects{s}.sessions{sessid}.id); end;
@@ -342,17 +359,25 @@ for g=1:length(groups)
             end
             % Add functional images
             CONN_x.Setup.functionals{sid}{sessid} = char(sessions{sessid}.files.func); % convert cell array to char array for CONN
+            % Preprocessed files loading (when loading_mode == 1)
             if loading_mode == 1
                 % ROI masks (= segmented grey/white/csf images)
                 CONN_x.Setup.masks.Grey{sid}{sessid} = sessions{sessid}.files.roi.grey;
                 CONN_x.Setup.masks.White{sid}{sessid} = sessions{sessid}.files.roi.white;
                 CONN_x.Setup.masks.CSF{sid}{sessid} = sessions{sessid}.files.roi.csf;
-                % Covariates 1st-level
-                if numel(fieldnames(firstlevelcovars)) > 0
-                    flckeys = fieldnames(firstlevelcovars);
-                    for fi=1:numel(flckeys)
-                        CONN_x.Setup.covariates.files{fi}{sid}{sessid} = sessions{sessid}.files.covars1.(flckeys{fi});
-                    end
+            end
+            % Additional ROIs (such as lesions masks)
+            if numel(fieldnames(struct_additional_rois)) > 0
+                roikeys = fieldnames(struct_additional_rois);
+                for ri=1:numel(roikeys)
+                    CONN_x.Setup.rois.files{ri}{sid}{sessid} = sessions{sessid}.files.roi.(roikeys{ri});
+                end
+            end
+            % Covariates 1st-level
+            if numel(fieldnames(firstlevelcovars)) > 0
+                flckeys = fieldnames(firstlevelcovars);
+                for fidx=1:numel(flckeys)
+                    CONN_x.Setup.covariates.files{fidx}{sid}{sessid} = sessions{sessid}.files.covars1.(flckeys{fidx});
                 end
             end
         end % for sessions
@@ -419,15 +444,29 @@ if loading_mode == 1
     CONN_x.Setup.covariates.add = 0;
 end
 
-% ROIs maps
+% ROIS CONFIGURATION
+%start_rois = length(CONN_x.Setup.rois.names);
+CONN_x.Setup.rois.add = 0; % Add over the existing ROIs
+
+% Configure additional structural roi regressors (eg, lesions maps)
+roikeys = fieldnames(struct_additional_rois);
+for ri=1:length(roikeys)
+    CONN_x.Setup.rois.names{ri} = roikeys{ri};
+    CONN_x.Setup.rois.dimensions{ri} = 16; % default number of components for the PCA decomposition
+    CONN_x.Setup.rois.weighted(ri) = 0; % use PCA decomposition (just like GM/WM/CSF rois
+    CONN_x.Setup.rois.regresscovariates(ri) = 1;
+end %endfor
+
+% Load and configure real ROIs maps (ie, seeds, atlases)
 if length(path_to_roi_maps) > 0
-    %start_rois = length(CONN_x.Setup.rois.names);
-    CONN_x.Setup.rois.add = 0; % Add over the existing ROIs
-    for r=1:length(roi_names)
+    for r=numel(fieldnames(struct_additional_rois)):(length(roi_names)+numel(fieldnames(struct_additional_rois)))
         %s = r+start_rois
         CONN_x.Setup.rois.names{r} = roi_names{r};
         CONN_x.Setup.rois.files{r} = roi_maps{r};
-    end
+        %CONN_x.Setup.rois.dimensions{r} = 1;
+        %CONN_x.Setup.rois.weighted{r} = 1;
+        %CONN_x.Setup.rois.regresscovariates{ri} = 0;
+    end %endfor
 end
 
 % ROI-level BOLD timeseries extraction: reuse smoothed functional images or use raw images?
@@ -571,8 +610,14 @@ function fpath = getimgpath(dirpath, imtype)
             end
         case 'func' % functional images (T2) folder
             fpath = fullfile(dirpath, 'rest');
+            if ~exist(fpath, 'dir')
+                fpath = fullfile(dirpath, 'func');
+            end
         case 'func_motion_corrected'
             fpath = fullfile(dirpath, 'rest', 'restMotionCorrected');
+            if ~exist(fpath, 'dir')
+                fpath = fullfile(dirpath, 'func', 'restMotionCorrected');
+            end
     end
 end
 
