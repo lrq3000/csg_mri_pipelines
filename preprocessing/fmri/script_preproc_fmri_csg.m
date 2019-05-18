@@ -96,6 +96,7 @@ realignunwarp = false;
 ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization, 'subj' for the average of subjects (might be incompatible with CAT12 as it is not offered on the GUI)
 % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12)
 cat12_spm_preproc_accuracy = 0.5; % Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases - from script's author's own tests, there is not much visible difference).
+cat12_shooting_method = 0.5; % use 0.5 for the default "Optimized Shooting - standard" in the template resolution (TR), but if you get an issue with some brain damaged patient ("Problem with Shooting", which means the shooting failed, probably because of a buggy mask/cropping?), then use 'eps' for the "Optimized Shooting - fast" in the template resolution too or 5 (vox) for "Optimized Shooting in the output resolution", this might fix the issue. Never use 4, the "Default Shooting", as it never detects if there is a problem. But do check visually afterwards, as even if there is no problem detected, the shooting might fail. Also note that geodesic shooting "reconstructs" the grey matter and deflates ventricles of brain damaged patients, prefer DARTEL if you want to limit reconstruction.
 
 % DO NOT TOUCH (unless you use a newer version than SPM12 or if the batch files were renamed)
 if script_mode == 0 % for SPM8+VBM8
@@ -474,7 +475,7 @@ for c = 1:length(conditions)
                     elseif script_mode == 2.5
                         % Geodesic shooting template
                         matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {fullfile(path_to_spm, path_to_shooting_template)};
-                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = 0.5;
+                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = cat12_shooting_method;
                         matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {}; % disable DARTEL
                     end
                     % SPM preprocessing accuracy
