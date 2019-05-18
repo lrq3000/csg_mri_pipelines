@@ -3,8 +3,9 @@ function movvis(root_path, maxelt)
 % Movement visualization of all subjects after preprocessing with ART
 % Folders tree structure must correspond to conn subjects loader expected structure (Condition/Subject/data/Session/modality/rp_*.txt), but in fact all subfolders are optional apart from Condition/Subject
 % maxelt allows to select the maximum number of elements to show on the same plot (the rest will be shown after pressing a key in the console)
+% Can also be used to visualize a single subject movement, by providing the full path to a rp_*.txt file as the root_path.
 %
-% v1.4
+% v1.5
 % by Stephen Larroque 2016-2019
 % License MIT
 
@@ -123,19 +124,27 @@ for sid=1:length(list_files)
     figure(1);
     %i = 1 + floor(s / width);
     %j = mod(s, width);
-    subplot(height, width, mod(sid-1,maxelt)+1 );
+    if exist(root_path, 'file') ~= 2 % not in single file mode
+        subplot(height, width, mod(sid-1,maxelt)+1 );
+    end
     plot(mov_data(:,1:3)); % x, y, z translation in mm
     xlabel('Volume number');
     ylabel('mm');
-    title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session ' mod ' list_files{sid}.modality]);
+    if exist(root_path, 'file') ~= 2 % not in single file mode
+        title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session ' mod ' list_files{sid}.modality]);
+    end
 
     % Plot rotation (tx, ty, tz in radians)
     figure(2);
-    subplot(height, width, mod(sid-1,maxelt)+1 );
+    if exist(root_path, 'file') ~= 2 % not in single file mode
+        subplot(height, width, mod(sid-1,maxelt)+1 );
+    end
     plot(mov_data(:,4:6)); % tx, ty, tz rotation in radians
     xlabel('Volume number');
     ylabel('rad');
-    title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session ' mod ' list_files{sid}.modality]);
+    if exist(root_path, 'file') ~= 2 % not in single file mode
+        title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session ' mod ' list_files{sid}.modality]);
+    end
 
     % Update counter
     curelt = curelt + 1;
