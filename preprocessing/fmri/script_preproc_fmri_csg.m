@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2019
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2019
-% v2.3.7
+% v2.4.1
 % License: MIT
 %
 % TODO:
@@ -50,8 +50,8 @@ clear classes;
 % Motion correction uses scan-to-scan motion to determine outliers using composite measures (ART toolbox by Susan Gabrieli-Whitfield)
 nslices = 0; % set to 0 for autodetect
 TR = 0; % set to 0 for autodetect
-script_mode = 1; % 0: use VBM8 + SPM8/DARTEL (slow); 1: use SPM12 with OldSeg only (fast); 2: use SPM12 + CAT12/SHOOT (slowest); 3: use SPM12 with Unified Segmentation (fast).
-motionRemovalTool = 'art';
+script_mode = 1; % 0: use VBM8 + SPM8/DARTEL (slow); 1: use SPM12 with OldSeg only (fast); 2: use SPM12 + CAT12/DARTEL (slowest); 2.5: use SPM12 + CAT12/SHOOT (slowest); 3: use SPM12 with Unified Segmentation (fast).
+motionRemovalTool = 'art'; % do not modify (except if you want to skip art motion correction)
 root_pth = 'X:\Path\To\Data'; % root path, where all the subjects data is
 path_to_spm = 'C:\matlab_tools\spm12'; % change here if you use SPM8 + VBM8 pipeline
 path_to_art = 'C:\matlab_tools\art-2015-10'; % path to the ART toolbox by Sue Whitfield (not ARTDETECT!)
@@ -96,7 +96,6 @@ realignunwarp = false;
 ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization, 'subj' for the average of subjects (might be incompatible with CAT12 as it is not offered on the GUI)
 % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12)
 cat12_spm_preproc_accuracy = 0.5; % Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases - from script's author's own tests, there is not much visible difference).
-cat12_shooting_method = 0.5; % use 0.5 for the default "Optimized Shooting - standard" in the template resolution (TR), but if you get an issue with some brain damaged patient ("Problem with Shooting", which means the shooting failed, probably because of a buggy mask/cropping?), then use eps (without quotes, this is a MATLAB command) for the "Optimized Shooting - fast" in the template resolution too, or 5 for "vox" option (optimized shooting in output resolution), which should fix the issue for these subjects. Never use default shooting (4) because it cannot report properly if the shooting failed. Know that even if you use different methods, sometimes for some subjects the shooting will always fail (then if you really need them you can resort to DARTEL - not implemented yet here)
 
 % DO NOT TOUCH (unless you use a newer version than SPM12 or if the batch files were renamed)
 if script_mode == 0 % for SPM8+VBM8
@@ -117,14 +116,14 @@ elseif script_mode == 1 % for SPM12 OldSeg
     end
     path_to_tissue_proba_map = 'tpm/TPM.nii'; % relative to spm path
     path_to_tpm_grey_white_csf = 'toolbox/OldSeg'; % relative to spm path
-elseif script_mode == 2 % for SPM12+CAT12
+elseif (script_mode == 2) || (script_mode == 2.5) % for SPM12+CAT12
     if ~realignunwarp
         path_to_batch = 'batch_preproc_spm12_CAT12Dartel.mat'; % relative to this script path
     else
         path_to_batch = 'batch_preproc_spm12_CAT12Dartel_unwarp.mat'; % relative to this script path
     end
     path_to_tissue_proba_map = 'tpm/TPM.nii'; % relative to spm path
-    %path_to_dartel_template = 'toolbox/cat12/templates_1.50mm/Template_1_IXI555_MNI152.nii';
+    path_to_dartel_template = 'toolbox/cat12/templates_1.50mm/Template_1_IXI555_MNI152.nii';
     path_to_shooting_template = 'toolbox/cat12/templates_1.50mm/Template_0_IXI555_MNI152_GS.nii'; % relative to cat12 path
 elseif script_mode == 3 % for SPM12 UniSeg
     if ~realignunwarp
@@ -254,7 +253,7 @@ for c = 1:length(conditions)
                 end
                 if script_mode == 0
                     matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.cfg_named_file.files{isess} = cellstr(fdata);
-                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 3)
+                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
                     matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.file_dir.file_ops.cfg_named_file.files{isess} = cellstr(fdata);
                 end
 
@@ -273,7 +272,7 @@ for c = 1:length(conditions)
                     matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).sname = sprintf('Named File Selector: Functional(%i) - Files', isess);
                     matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).src_exbranch = substruct('.','val', '{}',{2}, '.','val', '{}',{1});
                     matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).src_output = substruct('.','files', '{}',{isess});
-                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 3)
+                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
                     matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1) = cfg_dep(sprintf('Named File Selector: Functional(%i) - Files', isess), substruct('.','val', '{}',{2}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','files', '{}',{isess}));
                 end
 
@@ -288,7 +287,7 @@ for c = 1:length(conditions)
                 % idem for functional images coregistration to structural
                 if (script_mode == 1) || (script_mode == 3)
                     coregbaseidx = 5;
-                elseif (script_mode == 0) || (script_mode == 2)
+                elseif (script_mode == 0) || (script_mode == 2) || (script_mode == 2.5)
                     coregbaseidx = 6;
                 end
                 % Note: for realignment, there are 3 choices:
@@ -312,7 +311,7 @@ for c = 1:length(conditions)
 %                 newexpandidx = 3+isessoffset;
 %                 if script_mode == 1
 %                     coregbaseidx = 6;
-%                 elseif (script_mode == 0) || (script_mode == 2)
+%                 elseif (script_mode == 0) || (script_mode == 2) || (script_mode == 2.5)
 %                     coregbaseidx = 7;
 %                 end
 %                 % move all modules one index further, to leave room for a new Expand Frames module
@@ -342,7 +341,7 @@ for c = 1:length(conditions)
 %                     % TODO
 %                 elseif script_mode == 1
 %                     % TODO
-%                 elseif script_mode == 2
+%                 elseif (script_mode == 2) || (script_mode == 2.5)
 %                     % CORRECT (not tested)
 %                     matlabbatchall{matlabbatchall_counter}{coregbaseidx+isessoffset}.spm.spatial.realign.estwrite.data{2}(1).src_exbranch(2) = struct('type', '{}', 'subs', {{matlabbatch{6}.spm.spatial.realign.estwrite.data{2}(1).src_exbranch(2).subs{1}+1}});
 %                     % OTHER METHODS
@@ -394,7 +393,7 @@ for c = 1:length(conditions)
                 end
                 if script_mode == 0
                     matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.cfg_named_file.files = transpose({cellstr(sdata)});
-                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 3)
+                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
                     matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(sdata)}';
                 end
                 % Load functional image
@@ -407,7 +406,7 @@ for c = 1:length(conditions)
                 end
                 if script_mode == 0
                     matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.cfg_named_file.files = {cellstr(fdata)};
-                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 3)
+                elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
                     matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(fdata)};
                 end
 
@@ -460,7 +459,7 @@ for c = 1:length(conditions)
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.vbm8.estwrite.extopts.dartelwarp.normhigh.darteltpm = {strcat(path_to_vbm_dartel_template, ',1')};
                     % Ethnic affine regularization
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.vbm8.estwrite.opts.affreg = ethnictemplate;
-                elseif script_mode == 2
+                elseif (script_mode == 2) || (script_mode == 2.5)
                     % CAT12 config: load TPM and DARTEL templates
                     % Tissue probability map (use native Seg toolbox template)
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.tpm = {fullfile(path_to_spm, path_to_tissue_proba_map)};
@@ -468,10 +467,16 @@ for c = 1:length(conditions)
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.affreg = ethnictemplate;
                     % Dartel template
                     % Deprecated if using shooting template in new releases of CAT12
-                    %matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {fullfile(path_to_spm, path_to_dartel_template)};
-                    % Dartel shooting template
-                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {fullfile(path_to_spm, path_to_shooting_template)};
-                    matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = cat12_shooting_method;
+                    if script_mode == 2
+                        % Dartel template
+                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {fullfile(path_to_spm, path_to_dartel_template)};
+                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {}; % disable SHOOT
+                    elseif script_mode == 2.5
+                        % Geodesic shooting template
+                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {fullfile(path_to_spm, path_to_shooting_template)};
+                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = 0.5;
+                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {}; % disable DARTEL
+                    end
                     % SPM preprocessing accuracy
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.accstr = cat12_spm_preproc_accuracy;
                 elseif script_mode == 1
@@ -658,6 +663,7 @@ for c = 1:length(conditions)
                 %clear matlabbatch; % no clear in parfor
                 artbatchall{matlabbatchall_counter} = [];
                 datapath = fullfile(data(isub).sessions{isess}.dir, 'rest');
+                if ~exist(datapath, 'dir'), datapath = fullfile(data(isub).sessions{isess}.dir, 'func'); end % allow both rest and func folders
                 if art_before_smoothing
                     dataMotion = get_prepfdata(data, isub, isess, script_mode, addprefix);
                 else
@@ -763,6 +769,7 @@ if strcmp(motionRemovalTool,'art')
             for isess = 1:length(data(isub).sessions)
                 fprintf(1, '---- PROCESSING CONDITION %s SUBJECT %i (%s) SESSION %s ----\n', conditions{c}, isub, data(isub).name, data(isub).sessions{isess}.id);
                 datapath = fullfile(data(isub).sessions{isess}.dir, 'rest');
+                if ~exist(datapath, 'dir'), datapath = fullfile(data(isub).sessions{isess}.dir, 'func'); end % allow both rest and func folders
                 art_batch(fullfile(datapath, 'SPM.mat'));
                 % close all opened windows, because art toolbox is opening a new one everytime
                 fclose all;
@@ -803,6 +810,7 @@ end
 function [fdata] = get_fdata(data, isub, isess)
     %subjname = data(isub).funct;
     dirpath = fullfile(data(isub).sessions{isess}.dir,'rest');
+    if ~exist(dirpath, 'dir'), dirpath = fullfile(data(isub).sessions{isess}.dir, 'func'); end % allow both rest and func folders
     if ~exist(dirpath, 'dir')
         error('Error: No functional rest directory for subject %s session %s.', data(isub).name, data(isub).sessions{isess}.id);
     end
@@ -819,6 +827,7 @@ function [prepfdata] = get_prepfdata(data, isub, isess, script_mode, addprefix)
     end
     %subjname = data(isub).funct;
     dirpath = fullfile(data(isub).sessions{isess}.dir,'rest');
+    if ~exist(dirpath, 'dir'), dirpath = fullfile(data(isub).sessions{isess}.dir, 'func'); end % allow both rest and func folders
     prefix = 'wa'; % wra if using resliced images from Realign & Reslice module in Coregistration
     [prepfdata] = spm_select('FPList',dirpath,strcat('^',prefix,'.+\.(img|nii)$'));
     %prepfdata = char(regex_files(dirpath,strcat('^',prefix,'.+\.(img|nii)$')));
