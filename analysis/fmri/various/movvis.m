@@ -5,7 +5,7 @@ function movvis(root_path, maxelt)
 % maxelt allows to select the maximum number of elements to show on the same plot (the rest will be shown after pressing a key in the console)
 % Can also be used to visualize a single subject movement, by providing the full path to a rp_*.txt file as the root_path.
 %
-% v1.5
+% v1.5.1
 % by Stephen Larroque 2016-2019
 % License MIT
 
@@ -131,7 +131,7 @@ for sid=1:length(list_files)
     xlabel('Volume number');
     ylabel('mm');
     if exist(root_path, 'file') ~= 2 % not in single file mode
-        title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session ' mod ' list_files{sid}.modality]);
+        title([list_files{sid}.name ' ' list_files{sid}.condition ' ' list_files{sid}.session ' ' list_files{sid}.modality]);
     end
 
     % Plot rotation (tx, ty, tz in radians)
@@ -143,7 +143,7 @@ for sid=1:length(list_files)
     xlabel('Volume number');
     ylabel('rad');
     if exist(root_path, 'file') ~= 2 % not in single file mode
-        title(['Subject ' list_files{sid}.name ' cond ' list_files{sid}.condition ' sess ' list_files{sid}.session ' mod ' list_files{sid}.modality]);
+        title([list_files{sid}.name ' ' list_files{sid}.condition ' ' list_files{sid}.session ' ' list_files{sid}.modality]);
     end
 
     % Update counter
