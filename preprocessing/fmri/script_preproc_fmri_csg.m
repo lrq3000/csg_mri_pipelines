@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2019
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2019
-% v2.4.1
+% v2.4.2
 % License: MIT
 %
 % TODO:
@@ -471,12 +471,16 @@ for c = 1:length(conditions)
                     if script_mode == 2
                         % Dartel template
                         matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {fullfile(path_to_spm, path_to_dartel_template)};
-                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {}; % disable SHOOT
+                        if isfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'shooting')
+                            matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration = rmfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'shooting'); % disable SHOOT
+                        end
                     elseif script_mode == 2.5
                         % Geodesic shooting template
                         matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {fullfile(path_to_spm, path_to_shooting_template)};
                         matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = cat12_shooting_method;
-                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {}; % disable DARTEL
+                        if isfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'dartel')
+                            matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration = rmfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'dartel'); % disable DARTEL
+                        end
                     end
                     % SPM preprocessing accuracy
                     matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.accstr = cat12_spm_preproc_accuracy;
