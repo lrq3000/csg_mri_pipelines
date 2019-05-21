@@ -38,7 +38,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.4'
+__version__ = '1.2.5'
 
 import argparse
 import os
@@ -51,6 +51,7 @@ import traceback
 import urllib
 
 from pathlib2 import PurePath, PureWindowsPath, PurePosixPath # opposite operation of os.path.join (split a path
+from StringIO import StringIO
 from tee import Tee
 
 try:
@@ -423,6 +424,8 @@ In addition to the switches provided below, using this program as a Python modul
                         help='Regex of output path to check if the matched regex here is matched prior writing output files.', **widget_text)
     main_parser.add_argument('--report', type=str, required=False, default='pathmatcher_report.txt', metavar='pathmatcher_report.txt',
                         help='Where to store the simulation report (default: pwd = current working dir).', **widget_filesave)
+    main_parser.add_argument('--noreport', action='store_true', required=False, default=False,
+                        help='Do not create a report file, print the report in the console.')
     main_parser.add_argument('-l', '--log', metavar='/some/folder/filename.log', type=str, required=False,
                         help='Path to the log file. (Output will be piped to both the stdout and the log file)', **widget_filesave)
     main_parser.add_argument('-v', '--verbose', action='store_true', required=False, default=False,
@@ -453,6 +456,7 @@ In addition to the switches provided below, using this program as a Python modul
     show_fullpath = args.show_fullpath
     path_range = args.range
     reportpath = args.report
+    noreport = args.noreport
     verbose = args.verbose
     silent = args.silent
 
@@ -645,7 +649,11 @@ In addition to the switches provided below, using this program as a Python modul
         outdict[file_op[1]] = outdict.get(file_op[1], 0) + 1
 
     # Build and show simulation report in user's default text editor
-    with open(reportpath, 'w') as reportfile:
+    if noreport:
+        reportfile = StringIO()
+    else:
+        reportfile = open(reportpath, 'w')
+    try:
         reportfile.write("== REGEX PATH MATCHER SIMULATION REPORT ==\n")
         reportfile.write("Total number of files matched: %i\n" % len(files_list))
         reportfile.write("Parameters:\n")
@@ -683,8 +691,16 @@ In addition to the switches provided below, using this program as a Python modul
             # Write into report file
             reportfile.write("* %s %s %s %s %s" % (showinpath, "-->" if (outputpath or delete_mode) else "", showoutpath if outputpath else "", "[ALREADY_EXIST]" if conflict1 else '', "[CONFLICT]" if conflict2 else ''))
             reportfile.write("\n")
+        if noreport:
+            reportfile.seek(0)
+            print(reportfile.read())
+    finally:
+        try:
+            reportfile.close()
+        except ValueError as exc:
+            pass
     # Open the simulation report with the system's default text editor
-    if not (yes_flag or return_report):  # if --yes is supplied, just skip question and apply!
+    if not (yes_flag or return_report or noreport):  # if --yes is supplied, just skip question and apply!
         ptee.write("Opening simulation report with your default editor, a new window should open.")
         open_with_default_app(reportpath)
 
