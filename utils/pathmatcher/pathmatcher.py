@@ -38,7 +38,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.5'
+__version__ = '1.2.6'
 
 import argparse
 import os
@@ -74,6 +74,11 @@ try:
     _str = basestring
 except NameError:
     _str = str
+
+try:
+    import ujson as json
+except ImportError as exc:
+    import json
 
 
 
@@ -426,6 +431,8 @@ In addition to the switches provided below, using this program as a Python modul
                         help='Where to store the simulation report (default: pwd = current working dir).', **widget_filesave)
     main_parser.add_argument('--noreport', action='store_true', required=False, default=False,
                         help='Do not create a report file, print the report in the console.')
+    main_parser.add_argument('--tree', action='store_true', required=False, default=False,
+                        help='Regroup in a tree structure the matched files according to named and unnamed regex groups, and save the result as a json file (pathmatcher_tree.json).')
     main_parser.add_argument('-l', '--log', metavar='/some/folder/filename.log', type=str, required=False,
                         help='Path to the log file. (Output will be piped to both the stdout and the log file)', **widget_filesave)
     main_parser.add_argument('-v', '--verbose', action='store_true', required=False, default=False,
@@ -457,6 +464,7 @@ In addition to the switches provided below, using this program as a Python modul
     path_range = args.range
     reportpath = args.report
     noreport = args.noreport
+    tree_flag = args.tree
     verbose = args.verbose
     silent = args.silent
 
@@ -507,6 +515,10 @@ In addition to the switches provided below, using this program as a Python modul
     # Check if an output is needed and is not set
     if (copy_mode or symlink_mode or move_mode or movefast_mode) and not outputpath:
         raise ValueError('--copy or --symlink or --move or --move_fast specified but no --output !')
+
+    # If tree mode enabled, enable also the regroup option
+    if tree_flag:
+        regroup = True
 
     # -- Configure the log file if enabled (ptee.write() will write to both stdout/console and to the log file)
     if args.log:
@@ -742,12 +754,19 @@ In addition to the switches provided below, using this program as a Python modul
 
     # == RETURN AND END OF MAIN
     ptee.write("Task done, quitting.")
-    if return_report:  # return the matched files and their substitutions if available
+    # Save the tree structure in a json file if --tree is enabled
+    if tree_flag:
+        with open('pathmatcher_tree.json', 'wb') as jsonout:
+            jsonout.write(json.dumps(files_list_regroup, sort_keys=True, indent=4, separators=(',', ': ')))
+        print('Tree structure saved in file pathmatcher_tree.json')
+    # Script mode: return the matched files and their substitutions if available
+    if return_report:
         if regroup:
             return files_list_regroup, [conflict1_flag, conflict2_flag]
         else:
             return files_list, [conflict1_flag, conflict2_flag]
-    else:  # Just return non error code
+    # Standalone mode: just return non error code
+    else:
         return 0
 
 # Calling main function if the script is directly called (not imported as a library in another program)
