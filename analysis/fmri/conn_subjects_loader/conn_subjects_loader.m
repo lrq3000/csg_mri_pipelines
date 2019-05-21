@@ -33,6 +33,7 @@ function conn_subjects_loader()
 % * support BIDS format
 % * Implement modification/updating of previous CONN projects by using conn_batch (eg, conn_batch('Setup.functionals',myfiles);) instead of first creating a struct (which always overwrites the whole project). See http://www.nitrc.org/forum/forum.php?thread_id=7382&forum_id=1144
 % * add erosion for struct_additional_rois when/if it gets implemented for all rois (and not just for GM/WM/CSF as is currently the case)
+% * add another mode to detect session: by folder name, and assign to respective session id (instead of adding in order), this would allow the setup of experiments with missing sessions (ie, where subjects have some sessions but not others)
 %
 % TIPS:
 % * After the CONN project loads, make sure to:
