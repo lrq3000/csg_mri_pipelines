@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h, conn16b, conn17f and conn18a on data preprocessed with VBM8, CAT12, SPM12 OldSeg and with raw data not preprocessed (in this case, set loading_mode to 0)
-% v1.1.3
+% v1.1.4
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016-2019 Stephen Karl Larroque
@@ -453,20 +453,21 @@ CONN_x.Setup.rois.add = 0; % Add over the existing ROIs
 roikeys = fieldnames(struct_additional_rois);
 for ri=1:length(roikeys)
     CONN_x.Setup.rois.names{ri} = roikeys{ri};
-    CONN_x.Setup.rois.dimensions{ri} = 16; % default number of components for the PCA decomposition
-    CONN_x.Setup.rois.weighted(ri) = 0; % use PCA decomposition (just like GM/WM/CSF rois
+    CONN_x.Setup.rois.dimensions{ri} = 16; % use PCA decomposition (just like GM/WM/CSF rois, with the default number of components for the PCA decomposition
+    CONN_x.Setup.rois.weighted(ri) = 0; % non weighted
     CONN_x.Setup.rois.regresscovariates(ri) = 1;
 end %endfor
 
 % Load and configure real ROIs maps (ie, seeds, atlases)
 if length(path_to_roi_maps) > 0
-    for r=numel(fieldnames(struct_additional_rois)):(length(roi_names)+numel(fieldnames(struct_additional_rois)))
-        %s = r+start_rois
-        CONN_x.Setup.rois.names{r} = roi_names{r};
-        CONN_x.Setup.rois.files{r} = roi_maps{r};
-        %CONN_x.Setup.rois.dimensions{r} = 1;
-        %CONN_x.Setup.rois.weighted{r} = 1;
-        %CONN_x.Setup.rois.regresscovariates{ri} = 0;
+    count_struct_rois = numel(fieldnames(struct_additional_rois));
+    for r=1:length(roi_names)
+        r2 = r + count_struct_rois;
+        CONN_x.Setup.rois.names{r2} = roi_names{r};
+        CONN_x.Setup.rois.files{r2} = roi_maps{r};
+        CONN_x.Setup.rois.dimensions{r2} = 1; % use extracted timeseries (no PCA decomposition)
+        CONN_x.Setup.rois.weighted(r2) = 0; % non weighted
+        CONN_x.Setup.rois.regresscovariates(r2) = 0;
     end %endfor
 end
 
