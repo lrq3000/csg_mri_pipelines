@@ -18,7 +18,7 @@ function conn_subjects_loader()
 % by Stephen Larroque
 % Created on 2016-04-11
 % Tested on conn15h, conn16b, conn17f and conn18a on data preprocessed with VBM8, CAT12, SPM12 OldSeg and with raw data not preprocessed (in this case, set loading_mode to 0)
-% v1.1.4
+% v1.1.5
 %
 % Licensed under MIT LICENSE
 % Copyleft 2016-2019 Stephen Karl Larroque
@@ -457,6 +457,11 @@ for ri=1:length(roikeys)
     CONN_x.Setup.rois.dimensions{ri} = 16; % use PCA decomposition (just like GM/WM/CSF rois, with the default number of components for the PCA decomposition
     CONN_x.Setup.rois.weighted(ri) = 0; % non weighted
     CONN_x.Setup.rois.regresscovariates(ri) = 1;
+    CONN_x.Denoising.confounds.names{ri} = roikeys{ri};
+    CONN_x.Denoising.confounds.dimensions{ri} = 5; % 5 top components will be regressed out, default in CONN
+    CONN_x.Denoising.confounds.deriv{ri} = 0; % default
+    CONN_x.Denoising.confounds.power{ri} = 1; % default
+    CONN_x.Denoising.confounds.filter{ri} = 0; % default
 end %endfor
 
 % Load and configure real ROIs maps (ie, seeds, atlases)
