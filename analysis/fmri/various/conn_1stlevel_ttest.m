@@ -3,6 +3,7 @@ function conn_1stlevel_ttest()
 % make sure to cd to the firstlevel folder in your CONN project before running this script
 % By Alfonso Nieto-Castanon and Stephen Karl Larroque
 % From an original script here: https://www.nitrc.org/forum/message.php?msg_id=10082
+% v1.0
 % 2014-2019
 
 % PARAMETERS - EDIT ME
