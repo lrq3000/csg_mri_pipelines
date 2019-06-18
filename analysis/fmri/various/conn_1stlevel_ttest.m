@@ -3,7 +3,8 @@ function conn_1stlevel_ttest()
 % make sure to cd to the firstlevel folder in your CONN project before running this script
 % By Alfonso Nieto-Castanon and Stephen Karl Larroque
 % From an original script here: https://www.nitrc.org/forum/message.php?msg_id=10082
-% v1.0
+% Compatibility tested with MATLAB R2011a and R2018b
+% v1.1
 % 2014-2019
 
 % PARAMETERS - EDIT ME
@@ -18,8 +19,7 @@ contraststr = {};
 for i=1:numel(conds)
     contraststr{end+1} = sprintf('%dx%s', contrast(i), conds{i});
 end
-contraststr = join(contraststr, '_');
-contraststr = contraststr{1};
+contraststr = strjoin(contraststr, '_');
 
 % Compute degrees of freedom and standard error
 dof = [];
@@ -91,4 +91,78 @@ for source=sources
     V=struct('mat',a(1).mat,'dim',a(1).dim,'fname',filename,'pinfo',[1;0;0],'n',[1,1],'dt',[spm_type('float32') spm_platform('bigend')]);
     spm_write_vol(V,diffmapthreshneg);
 end
+
+fprintf('All done!\n')
+end
+
+function output = strjoin(input, separator) 
+%STRJOIN Concatenate an array into a single string. 
+% 
+% S = strjoin(C) 
+% S = strjoin(C, separator) 
+% 
+% Description 
+% 
+% S = strjoin(C) takes an array C and returns a string S which concatenates 
+% array elements with comma. C can be a cell array of strings, a character 
+% array, a numeric array, or a logical array. If C is a matrix, it is first 
+% flattened to get an array and concateneted. S = strjoin(C, separator) also 
+% specifies separator for string concatenation. The default separator is comma. 
+%
+% From: https://www.mathworks.com/matlabcentral/fileexchange/31862-strjoin
+% 
+% Examples 
+% 
+% >> str = strjoin({'this','is','a','cell','array'}) 
+% str = 
+% this,is,a,cell,array 
+% 
+% >> str = strjoin([1,2,2],'_') 
+% str = 
+% 1_2_2 
+% 
+% >> str = strjoin({1,2,2,'string'},'\t') 
+% str = 
+% 1 2 2 string 
+% 
+% >> str = strjoin({{'a' 1} {'b' 2}}, {'\n' ': '}) 
+% str = 
+% a: 1 
+% b: 2 
+%
+
+if nargin < 2, separator = ','; end 
+if iscell(separator) 
+for i = 1:length(separator) 
+assert(ischar(separator{i}), 'Invalid separator input at index %d: %s ', i, class(separator{i})); 
+end 
+else 
+output = strjoin(input, {separator}); 
+return 
+end
+
+output = ''; 
+if ~isempty(input) 
+if ischar(input) 
+input = cellstr(input); 
+end 
+if isnumeric(input) || islogical(input) 
+output = [repmat(sprintf(['%.15g', separator{1}], input(1:end-1)), ... 
+1, ~isscalar(input)), ... 
+sprintf('%.15g', input(end))]; 
+elseif iscellstr(input) 
+output = [repmat(sprintf(['%s', separator{1}], input{1:end-1}), ... 
+1, ~isscalar(input)), ... 
+sprintf('%s', input{end})]; 
+elseif iscell(input) 
+if length(separator) < 2 
+separator{2} = separator{1}; 
+end 
+output = strjoin(cellfun(@(x)strjoin(x, separator(2:end)), input, ... 
+'UniformOutput', false), ... 
+separator{1}); 
+else 
+error('strjoin:invalidInput', 'Unsupported input: %s', class(input)); 
+end 
+end 
 end
