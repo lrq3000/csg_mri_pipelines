@@ -23,8 +23,8 @@ function [T_thr, P_thr] = threshold_fdr(imfilepath, mcc, thr, df, STAT, conjonc_
 %
 % TODO:
 % * Different results from conn_fdr and conn_clusters, the threshold here is lower (CONN is more conservative than SPM for the same thresholds)
-% * Allow cluster-wise correction
-% * Try to support Z maps (BETA_SubjectXXX_ConditionYYY_SourceZZZ.nii from CONN)
+% * Allow cluster-wise correction, see: https://www2.bc.edu/sd-slotnick/scripts/cluster_threshold_beta.m
+% * Try to support first-level Z maps (BETA_SubjectXXX_ConditionYYY_SourceZZZ.nii from CONN), see how CONN does it here: https://www.nitrc.org/forum/message.php?msg_id=5167
 %
 % Resources:
 % https://warwick.ac.uk/fac/sci/statistics/staff/academic-research/nichols/scripts/spm/johnsgems5/corrclusth.m
