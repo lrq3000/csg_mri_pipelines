@@ -18,6 +18,7 @@ function [T_thr, P_thr] = threshold_fdr(imfilepath, mcc, thr, df, STAT, conjonc_
 %
 % By Stephen Larroque, Coma Science Group, GIGA-Consciousness, University and Hospital of Liege
 % Created on 2017-11-29
+% LICENSE: MIT
 %
 % v0.1.1
 %
