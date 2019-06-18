@@ -14,8 +14,9 @@ function h = conn_3dvis(imfilepath, vismode)
 %
 % By Stephen Larroque, Coma Science Group, GIGA-Consciousness, University and Hospital of Liege
 % Created on 2019-06-18
+% License: MIT
 %
-% v0.1.0
+% v0.1.1
 %
 % TODO:
 % * Nothing
@@ -31,7 +32,7 @@ end
 if strcmpi(vismode, 'surface')
     h = conn_mesh_display(imfilepath);
 elseif strcmpi(vismode, 'volume')
-    h = conn_mesh_display('' ,imfilepath);
+    h = conn_mesh_display('' ,imfilepath, [],[],[],[],0.5);
 else
     error('Invalid vismode!\n')
 end
