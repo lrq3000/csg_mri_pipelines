@@ -38,7 +38,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.7'
+__version__ = '1.2.8'
 
 import argparse
 import chardet
@@ -681,9 +681,9 @@ In addition to the switches provided below, using this program as a Python modul
         reportfile.write("== REGEX PATH MATCHER SIMULATION REPORT ==\n")
         reportfile.write("Total number of files matched: %i\n" % len(files_list))
         reportfile.write("Parameters:\n")
-        reportfile.write("- Input root: %s\n" % inputpath)
+        reportfile.write("- Input root: %s\n" % inputpath.encode('utf-8'))
         reportfile.write("- Input regex: %s\n" % regex_input)
-        reportfile.write("- Output root: %s\n" % outputpath)
+        reportfile.write("- Output root: %s\n" % outputpath.encode('utf-8'))
         reportfile.write("- Output regex: %s\n" % regex_output)
         reportfile.write("- Full arguments: %s" % ' '.join(sys.argv))
         reportfile.write("\r\n")
