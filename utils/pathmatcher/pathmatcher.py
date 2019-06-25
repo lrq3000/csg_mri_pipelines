@@ -38,9 +38,10 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.6'
+__version__ = '1.2.7'
 
 import argparse
+import chardet
 import os
 import posixpath  # to generate unix paths
 import re
@@ -473,6 +474,17 @@ In addition to the switches provided below, using this program as a Python modul
     # First check if there is any input path, it's always needed
     if inputpath is None:
         raise NameError('No input path specified! Please specify one!')
+
+	# Try to decode in unicode, else we will get issues down the way when outputting files
+    try:
+        inputpath = unicode(inputpath)
+    except UnicodeDecodeError as exc:
+        inputpath = unicode(inputpath, encoding=chardet.detect(inputpath)['encoding'])
+    if outputpath:
+        try:
+            outputpath = unicode(outputpath)
+        except UnicodeDecodeError as exc:
+            outputpath = unicode(outputpath, encoding=chardet.detect(outputpath)['encoding'])
 
     # Remove trailing spaces
     inputpath = inputpath.strip()
