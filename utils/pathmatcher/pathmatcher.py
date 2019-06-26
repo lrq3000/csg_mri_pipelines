@@ -38,7 +38,7 @@
 
 from __future__ import print_function
 
-__version__ = '1.2.8'
+__version__ = '1.2.9'
 
 import argparse
 import chardet
@@ -683,7 +683,7 @@ In addition to the switches provided below, using this program as a Python modul
         reportfile.write("Parameters:\n")
         reportfile.write("- Input root: %s\n" % inputpath.encode('utf-8'))
         reportfile.write("- Input regex: %s\n" % regex_input)
-        reportfile.write("- Output root: %s\n" % outputpath.encode('utf-8'))
+        reportfile.write("- Output root: %s\n" % (outputpath.encode('utf-8') if outputpath else ''))
         reportfile.write("- Output regex: %s\n" % regex_output)
         reportfile.write("- Full arguments: %s" % ' '.join(sys.argv))
         reportfile.write("\r\n")
