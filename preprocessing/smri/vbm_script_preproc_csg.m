@@ -24,7 +24,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself Python is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.3.4
+% v1.3.5
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2019
 % LICENSE: MIT
@@ -57,7 +57,8 @@ skip2ndlevel = 0; % if you only want to do VBM preprocessing but not compare aga
 skipresults = 0; % if you do not want to generate the result images from the 2nd level results (requires skip2ndlevel set to 0)
 parallel_processing = false; % enable parallel processing between multiple subjects (num_cores need to be set to 0 to disable parallel processing inside CAT12, so we can parallelize outside!)
 ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization, 'subj' for the average of subjects (might be incompatible with CAT12 as it is not offered on the GUI)
-cat12_spm_preproc_accuracy = 0.5; % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12). Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases - from script's author's own tests, there is not much visible difference).
+cat12_spm_preproc_accuracy = 0.75; % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12). Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases - from script's author's own tests, there is not much visible difference).
+autoreorient = false; % automatically reorient the structural before preprocessing? Requires the prior installation of https://github.com/lrq3000/spm_auto_reorient_coregister
 
 if script_mode == 0
     path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii'; % relative to spm path
@@ -129,6 +130,18 @@ else
     T1fileslist = {rootpath_single};
 end
 fprintf('Found %i T1 files.\n', length(T1fileslist));
+
+if autoreorient
+    fprintf('=== AUTOREORIENT STRUCTURALS ===\n');
+    % Add OldNorm toolbox in path (necessary for spm_auto_reorient)
+    addpath(fullfile(path_to_spm, 'toolbox', 'OldNorm')); % add the path to SPM8
+    for t=1:length(T1fileslist)
+        T1filepath = T1fileslist{t};
+
+        fprintf('== AUTOREORIENTING IMAGE %i/%i: %s.\n', t, length(T1fileslist), T1filepath);
+        spm_auto_reorient(T1filepath);
+    end
+end
 
 if ~skip1stlevel
     fprintf('=== BUILDING VBM PREPROCESSING (1ST-LEVEL) JOBS ===\n');
