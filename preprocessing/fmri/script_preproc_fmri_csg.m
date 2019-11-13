@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2019
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2019
-% v2.4.2
+% v2.4.3
 % License: MIT
 %
 % TODO:
@@ -79,7 +79,8 @@ refslice = 'first';  % reference slice for slice timing correction. Can either b
 %keep_normalized_timeseries = 1; % 1: keep, 0: delete % DEPRECATED: normalized timeseries are kept in any case (user can always delete afterward)
 % Smoothing kernel (isotropic)
 smoothingkernel = 8;
-% Resize functional to 3x3x3 before smoothing
+% Resize/resample/reslice functionals to 3x3x3 before smoothing
+% NOTE: if you have multiband BOLD, please disable this, else your BOLD may end up being cut in half!
 resizeto3 = false;
 % Parallel preprocessing?
 parallel_processing = true;
