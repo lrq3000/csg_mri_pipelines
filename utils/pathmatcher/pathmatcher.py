@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # pathmatcher.py
-# Copyright (C) 2016-2019 Larroque Stephen
+# Copyright (C) 2016-2020 Larroque Stephen
 #
 # Licensed under the MIT License (MIT)
 #
@@ -25,7 +25,7 @@
 #
 #=================================
 #        Regular Expression Path Reorganizer
-#                    Python 2.7.15
+#                    Python 3.7.0 (previously 2.7.15)
 #                by Stephen Larroque
 #                     License: MIT
 #            Creation date: 2016-03-24
