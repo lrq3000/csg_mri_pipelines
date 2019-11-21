@@ -31,6 +31,8 @@
 #            Creation date: 2016-03-27
 #=================================
 #
+# This script was tested on Windows exclusively, it may or may not work on other platforms such as Linux, although it should as all the code here is pure python and cross-platform. However, the mlabwrap-purepy may need some tweaking, as it was ported from Python 2 to Python 3 only on Windows, it may need some testing for Linux and MacOSX (but it should support these platforms, as it did on Python 2).
+#
 #
 #
 
@@ -178,6 +180,7 @@ class UnicodeWriter(object):
     A CSV writer which will write rows to CSV file "f",
     which is encoded in the given encoding.
     from https://docs.python.org/2/library/csv.html
+    TODO: replace with https://github.com/xflr6/csv23 or https://github.com/jdunck/python-unicodecsv
     """
 
     def __init__(self, f, dialect=csv.excel, encoding="utf-8", **kwds):
@@ -191,6 +194,7 @@ class UnicodeWriter(object):
         self.writer.writerow([s.encode("utf-8") if isinstance(s, basestring) else s for s in row])
         # Fetch UTF-8 output from the queue ...
         data = self.queue.getvalue()
+        # Unicode sandwidch: decode in utf
         data = data.decode("utf-8")
         # ... and reencode it into the target encoding
         data = self.encoder.encode(data)
@@ -340,14 +344,15 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         regex_anat = r'(\dir)/(\dir)/data/(\dir/)?mprage/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/mprage/struct.(img|nii)
     if regex_func is None:
         regex_func = r'(\dir)/(\dir)/data/(?P<func>\dir/)?rest/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/rest/func_01.(img|nii)
-    if regex_motion is None:
-        regex_motion = r'(\dir)/(\dir)/data/(?P<motion>\dir/)?rest/rp_[^\\/]+\.txt'  # canonical example: COND/SUBJID/data/(SESSID)?/rest/rp_*.txt
+    #if regex_motion is None:
+    #    regex_motion = r'(\dir)/(\dir)/data/(?P<motion>\dir/)?rest/rp_[^\\/]+\.txt'  # canonical example: COND/SUBJID/data/(SESSID)?/rest/rp_*.txt
 
     # -- Preprocess regular expression to add aliases
     # Directory alias
     regex_anat = regex_anat.replace('\dir', r'[^\\/]*?')
     regex_func = regex_func.replace('\dir', r'[^\\/]*?')
-    regex_motion = regex_motion.replace('\dir', r'[^\\/]*?')
+    if regex_motion is not None:
+        regex_motion = regex_motion.replace('\dir', r'[^\\/]*?')
 
     ### Main program
     print("\n== Reorientation and registration helper started ==\n")
@@ -820,9 +825,15 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     # Append to our list of movement parameters
                     mov_list.append(func_metadata + mov_metrics)
         # Save the list as a csv
-        with open(os.path.join(rootfolderpath, 'movement_parameters.csv'), 'wb') as f:
-            csv_handler = UnicodeWriter(f, delimiter=';', quoting=csv.QUOTE_ALL, encoding='utf-8-sig')
-            csv_handler.writerows(mov_list)
+        if PY3:
+            import csv
+            with open(os.path.join(rootfolderpath, 'movement_parameters.csv'), 'w', newline='', encoding='utf-8-sig') as f:
+                csv_handler = csv.writer(f, delimiter=';', quoting=csv.QUOTE_ALL)
+                csv_handler.writerow(mov_list)
+        else:
+            with open(os.path.join(rootfolderpath, 'movement_parameters.csv'), 'wb') as f:
+                csv_handler = UnicodeWriter(f, delimiter=';', quoting=csv.QUOTE_ALL, encoding='utf-8-sig')
+                csv_handler.writerows(mov_list)
 
     # == END: now user must execute the standard preprocessing script
     #mlab.stop()  # stop Matlab session
