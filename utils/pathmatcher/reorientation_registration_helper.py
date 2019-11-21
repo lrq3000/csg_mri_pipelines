@@ -554,7 +554,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                     im_table[im_key]['func_expanded'] = {}
                 #im_table[im_key]['func_expanded'][im_key_func] = mlab.workspace.expandhelper(im_table[im_key]['func'][im_key_func]).tolist()  # for matlab_wrapper
                 mlab._dont_proxy["cell"] = True  # enable autoconversion for cell arrays and char arrays in mlabwrap based libraries (else we would get a MLabWrapProxy object which we can't do anything with in Python)
-                im_table[im_key]['func_expanded'][im_key_func] = mlab.expandhelper(im_table[im_key]['func'][im_key_func]).tolist()  # for mlabwrap based libraries
+                im_table[im_key]['func_expanded'][im_key_func] = mlab.expandhelper(im_table[im_key]['func'][im_key_func])  # for mlabwrap based libraries
                 if isinstance(im_table[im_key]['func_expanded'][im_key_func], basestring):
                     # If there is only one file, matlab will return a char, thus a string, so we need to convert back to a list to be consistent
                     im_table[im_key]['func_expanded'][im_key_func] = [im_table[im_key]['func_expanded'][im_key_func]]
@@ -567,7 +567,9 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
                         pass
         else:
             # only one folder
-            im_table[im_key]['func_expanded'] = mlab.workspace.expandhelper(im_table[im_key]['func']).tolist()
+            #im_table[im_key]['func_expanded'] = mlab.workspace.expandhelper(im_table[im_key]['func']).tolist()  # for matlab_wrapper
+            mlab._dont_proxy["cell"] = True  # enable autoconversion for cell arrays and char arrays in mlabwrap based libraries (else we would get a MLabWrapProxy object which we can't do anything with in Python)
+            im_table[im_key]['func_expanded'] = mlab.expandhelper(im_table[im_key]['func'])  # for mlabwrap based libraries
             if isinstance(im_table[im_key]['func_expanded'], basestring):
                 # If there is only one file, matlab will return a char, thus a string, so we need to convert back to a list to be consistent
                 im_table[im_key]['func_expanded'] = [im_table[im_key]['func_expanded']]
