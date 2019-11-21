@@ -49,7 +49,7 @@ Using from Python
 
 Also see the docstring in mlabwrap.py. It goes something like this::
 
-    import mlabwrap
+    from mlabwrap import mlabwrap
     mlab = mlabwrap.init()
 
 If the main matlab executable (or a symlink to it) is not on your system PATH,
