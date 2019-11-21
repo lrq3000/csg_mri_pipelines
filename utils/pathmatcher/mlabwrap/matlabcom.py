@@ -76,7 +76,10 @@ class MatlabCom(object):
     The return value of the function is the matlab output following the call.
     """
     #print expression
-    self._check_open()
+    try:
+        self._check_open()
+    except Exception as exc:
+        return 0
     ret = self.client.Execute(expression)
     #print ret
     if identify_erros and ret.rfind('???') != -1:

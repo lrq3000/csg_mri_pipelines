@@ -57,8 +57,12 @@ pass its full path as the first parameter to init. Now you can do::
 
     sorted = mlab.sort([1 2 3])
 
-Or even::
+Or even:
 
     mlab._do("a = [3 2 1]; b = mean(a);", nout=0)
     print mlab.b
+
+To enable basic support for cell arrays or char arrays, use before your call:
+
+    mlab._dont_proxy["cell"] = True
 

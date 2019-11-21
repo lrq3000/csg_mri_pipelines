@@ -286,7 +286,6 @@ class MlabObjectProxy(object):
 
     def __setstate__(self, state):
         "Experimental unpickling support."
-        global mlab         #XXX this should be dealt with correctly
         old_name = state['name']
         mlab_name = "UNPICKLED%s__" % gensym('')
         tmp_filename = None
@@ -300,7 +299,7 @@ class MlabObjectProxy(object):
                        "%s = TMP_UNPICKLE_STRUCT__.%s;" % (mlab_name, old_name))
             mlabraw.eval(mlab._session, "clear TMP_UNPICKLE_STRUCT__;")
             # XXX
-            mlab._make_proxy(mlab_name, constructor=lambda *args: self.__init__(*args) or self)
+            self.__dict__['_mlabwrap']._make_proxy(mlab_name, constructor=lambda *args: self.__init__(*args) or self)
             mlabraw.eval(mlab._session, 'clear %s;' % mlab_name)
         finally:
             if tmp_filename and os.path.exists(tmp_filename):
@@ -309,7 +308,7 @@ class MlabObjectProxy(object):
 
     def __repr__(self):
         output = []
-        mlab._do('disp(%s)' % self._name, nout=0, handle_out=output.append)
+        self.__dict__['_mlabwrap']._do('disp(%s)' % self._name, nout=0, handle_out=output.append)
         rep = "".join(output)
         klass = self._mlabwrap._do("class(%s)" % self._name)
 ##         #XXX what about classes?
