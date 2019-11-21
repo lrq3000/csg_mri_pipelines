@@ -35,8 +35,22 @@
 #
 
 from __future__ import print_function
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
-__version__ = '1.6.3'
+from future import standard_library
+standard_library.install_aliases()
+from builtins import next
+from builtins import input
+from builtins import str
+from builtins import range
+from past.builtins import basestring
+from builtins import object
+__version__ = '1.7.0'
+
+import sys
+PY3 = (sys.version_info >= (3,0,0))
 
 import argparse
 import os
@@ -44,18 +58,29 @@ import random
 import re
 import shlex
 import shutil
-import sys
 import traceback
 
-import pathmatcher
+if PY3:
+    import pathmatcher
+else:
+    from . import pathmatcher
 
 from collections import OrderedDict
-from itertools import izip_longest
+
+if PY3:
+    from itertools import zip_longest as izip_longest
+else:
+    try:
+        from itertools import izip_longest
+    except ImportError as exc:
+        from itertools import zip_longest as izip_longest
 
 # for saving movement parameters as csv
 import numpy as np
 import itertools
-import csv, cStringIO, codecs
+import csv, codecs
+
+from io import StringIO
 
 try:
     from scandir import walk # use the faster scandir module if available (Python >= 3.5), see https://github.com/benhoyt/scandir
@@ -82,7 +107,7 @@ except:
 def ask_step():
     '''Ask to user if s/he is ready to do the step'''
     while 1:
-        user_choice = raw_input('Do this step? [C]ontinue (default), [S]kip to next, [A]bort: ')
+        user_choice = input('Do this step? [C]ontinue (default), [S]kip to next, [A]bort: ')
         if user_choice.lower() == 'a':
             sys.exit(0)
         elif user_choice.lower() == 's':
@@ -98,7 +123,7 @@ def ask_next(filepath='', msg=None, customchoices=[]):
         msg = "\nLoad next file %s? [C]ontinue (default), [S]kip to next step, [N]ext file, [A]bort: " % filepath
 
     while 1:
-        user_choice = raw_input(msg)
+        user_choice = input(msg)
         if user_choice.lower() == 'a':
             sys.exit(0)
         elif user_choice.lower() == 's':
@@ -139,7 +164,7 @@ def grouper(n, iterable, fillvalue=None):
     '''grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx'''
     # From Python documentation
     args = [iter(iterable)] * n
-    return izip_longest(fillvalue=fillvalue, *args)
+    return zip_longest(fillvalue=fillvalue, *args)
 
 def is_int(s):
     try: 
@@ -148,7 +173,7 @@ def is_int(s):
     except (ValueError, TypeError) as exc:
         return False
 
-class UnicodeWriter:
+class UnicodeWriter(object):
     """
     A CSV writer which will write rows to CSV file "f",
     which is encoded in the given encoding.
@@ -157,7 +182,7 @@ class UnicodeWriter:
 
     def __init__(self, f, dialect=csv.excel, encoding="utf-8", **kwds):
         # Redirect output to a queue
-        self.queue = cStringIO.StringIO()
+        self.queue = StringIO()
         self.writer = csv.writer(self.queue, dialect=dialect, **kwds)
         self.stream = f
         self.encoder = codecs.getincrementalencoder(encoding)()
@@ -315,6 +340,8 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
         regex_anat = r'(\dir)/(\dir)/data/(\dir/)?mprage/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/mprage/struct.(img|nii)
     if regex_func is None:
         regex_func = r'(\dir)/(\dir)/data/(?P<func>\dir/)?rest/[^\\/]+\.(?:img|nii)'  # canonical example: COND/SUBJID/data/(SESSID)?/rest/func_01.(img|nii)
+    if regex_motion is None:
+        regex_motion = r'(\dir)/(\dir)/data/(?P<motion>\dir/)?rest/rp_[^\\/]+\.txt'  # canonical example: COND/SUBJID/data/(SESSID)?/rest/rp_*.txt
 
     # -- Preprocess regular expression to add aliases
     # Directory alias
@@ -439,7 +466,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     # == DETECT FUNCTIONAL IMAGES
     print("\n=> STEP4: DETECTION OF FUNCTIONAL IMAGES")
     print("Functional images will now be detected and associated with their relative structural images.\nPlease press ENTER and wait (can be a bit long)...")
-    raw_input()
+    input()
     # -- Walk files and detect functional images (we already got structural)
     os.chdir(rootfolderpath)  # reset to rootfolder to generate the simulation report there
     func_list, conflict_flags = pathmatcher.main(r' -i "{inputpath}" -ri "{regex_func}" --silent '.format(**template_vars), True)
@@ -785,7 +812,7 @@ Note3: you need the pathmatcher.py library (see lrq3000 github).
     # == END: now user must execute the standard preprocessing script
     #mlab.stop()  # stop Matlab session
     print("\nAll done. You should now use the standard preprocessing script. Quitting.")
-    _ = raw_input("Press any key to quit.")  # IMPORTANT: if we don't wait, the last task will be closed because the program is closing!
+    _ = input("Press any key to quit.")  # IMPORTANT: if we don't wait, the last task will be closed because the program is closing!
 
     return 0
 

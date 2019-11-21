@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 #
 
+from __future__ import unicode_literals
+from builtins import object
 import sys
 
 if sys.version_info < (3,):

@@ -37,8 +37,21 @@
 #
 
 from __future__ import print_function
+from __future__ import absolute_import
+from __future__ import unicode_literals
 
-__version__ = '1.2.9'
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import input
+from builtins import range
+from past.builtins import basestring
+from builtins import object
+
+__version__ = '1.3.0'
+
+import sys
+PY3 = (sys.version_info >= (3,0,0))
 
 import argparse
 import chardet
@@ -47,13 +60,17 @@ import posixpath  # to generate unix paths
 import re
 import shlex
 import shutil
-import sys
 import traceback
-import urllib
+import urllib.request, urllib.parse, urllib.error
 
-from pathlib2 import PurePath, PureWindowsPath, PurePosixPath # opposite operation of os.path.join (split a path
-from StringIO import StringIO
-from tee import Tee
+if PY3:
+    from pathlib import PurePath, PureWindowsPath, PurePosixPath # opposite operation of os.path.join (split a path
+    from tee import Tee
+else:
+    from .pathlib2 import PurePath, PureWindowsPath, PurePosixPath # opposite operation of os.path.join (split a path
+    from .tee import Tee
+
+from io import StringIO
 
 try:
     from scandir import walk # use the faster scandir module if available (Python >= 3.5), see https://github.com/benhoyt/scandir
@@ -94,7 +111,7 @@ class More(object):
         s = str(other).split("\n")
         for i in range(0, len(s), self.num_lines):
             print("\n".join(s[i:i+self.num_lines]))
-            raw_input("Press <Enter> for more")
+            input("Press <Enter> for more")
 
 def open_with_default_app(filepath):
     """Open the report with the default text editor"""
@@ -477,14 +494,14 @@ In addition to the switches provided below, using this program as a Python modul
 
 	# Try to decode in unicode, else we will get issues down the way when outputting files
     try:
-        inputpath = unicode(inputpath)
+        inputpath = str(inputpath)
     except UnicodeDecodeError as exc:
-        inputpath = unicode(inputpath, encoding=chardet.detect(inputpath)['encoding'])
+        inputpath = str(inputpath, encoding=chardet.detect(inputpath)['encoding'])
     if outputpath:
         try:
-            outputpath = unicode(outputpath)
+            outputpath = str(outputpath)
         except UnicodeDecodeError as exc:
-            outputpath = unicode(outputpath, encoding=chardet.detect(outputpath)['encoding'])
+            outputpath = str(outputpath, encoding=chardet.detect(outputpath)['encoding'])
 
     # Remove trailing spaces
     inputpath = inputpath.strip()
@@ -494,10 +511,10 @@ In addition to the switches provided below, using this program as a Python modul
     # Input or output path is a URL (eg: file:///media/... on Ubuntu/Debian), then strip that out
     RE_urlprotocol = re.compile(r'^\w{2,}:[/\\]{2,}', re.I)
     if RE_urlprotocol.match(inputpath):
-        inputpath = urllib.unquote(inputpath).decode("utf8")  # first decode url encoded characters such as spaces %20
+        inputpath = urllib.parse.unquote(inputpath).decode("utf8")  # first decode url encoded characters such as spaces %20
         inputpath = r'/' + RE_urlprotocol.sub(r'', inputpath)  # need to prepend the first '/' since it is probably an absolute path and here we will strip the whole protocol
     if outputpath and RE_urlprotocol.match(outputpath):
-        outputpath = urllib.unquote(outputpath).decode("utf8")
+        outputpath = urllib.parse.unquote(outputpath).decode("utf8")
         outputpath = r'/' + RE_urlprotocol.sub(r'', outputpath)
 
     # Check if input/output paths exist, else might be a relative path, then convert to an absolute path
@@ -742,7 +759,7 @@ In addition to the switches provided below, using this program as a Python modul
 
         # Ask user if we should apply
         if not (yes_flag or return_report):  # if --yes is supplied, just skip question and apply!
-            applycopy = raw_input("Do you want to apply the result of the path reorganization simulation on %i files? [Y/N]: " % len(files_list))
+            applycopy = input("Do you want to apply the result of the path reorganization simulation on %i files? [Y/N]: " % len(files_list))
             if applycopy.lower() != 'y':
                 return 0
 
