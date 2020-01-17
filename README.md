@@ -1,4 +1,5 @@
 # Coma Science Group MRI pipelines
+
 MRI preprocessing and analysis pipelines and tools for the study of disorders of consciousness.
 
 This includes pipelines for fMRI BOLD EPI (using SPM and CONN and optionally CAT12 and rshrf), for DWI tractography (using MRTRIX3 and FSL) and structural voxel-based morphometry using VBM8 or CAT12.
@@ -223,7 +224,11 @@ my_results = pm(r'-i "ABIDE/" -ri "mprage.nii.gz"', return_report=True)  # use r
 print(my_results)
 ```
 
-A concrete example of scripting of `pathmatcher.py` can be found inside the `reorientation_registration_helper.py` script.
+A concrete example of scripting of `pathmatcher.py` can be found inside the `reorientation_registration_helper.py` script, which streamlines the manual preprocessing of fMRI data (reorientation, coregistration, quality and motion assessment, generation of composite motion metrics such as framewise median absolute deviation, etc).
+
+### Similar projects
+
+A similar project, and potentially more powerful, is [fselect](https://github.com/jhspetersson/fselect), which allows to use SQL-like queries on files. In MATLAB, similar functions are available in [dirPlus](https://github.com/kpeaton/dirPlus).
 
 ## ASCII Rename
 
@@ -246,7 +251,7 @@ Ascii Path Renamer v0.3
 Description: Rename all directories/files names from unicode (ie, accentuated characters) to ascii.
 
 Note: use --gui (without any other argument) to launch the experimental gui (needs Gooey library).
-    
+
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -292,7 +297,7 @@ Note: you need to `pip install mlab` before using this script.
 Note2: you need to have set both spm and spm_auto_reorient in your path in MATLAB before using this script.
 Note3: you need the pathmatcher.py library (see lrq3000 github).
 
-    
+
 
 optional arguments:
   -h, --help            show this help message and exit
