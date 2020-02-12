@@ -1,4 +1,4 @@
-Structural MRI voxel-based morphometry with DARTEL analysis pipeline using VBM8 and SPM8 or CAT12 and SPM12. The entry script is vbm_script_preproc_csg.m (requires MATLAB).
+Structural MRI voxel-based morphometry with DARTEL analysis pipeline using VBM8 and SPM8 or CAT12 and SPM12. The entry script is vbm_script_preproc_csg.m (requires MATLAB). Note that CAT12 must be installed inside spm/toolbox/cat12, it cannot be placed outside (else you will get weird errors).
 
 You also needs Python 3 with PILLOW if you want to automatically generate result images. For deployment, it's possible to use `pyinstaller vbm_gen_final_image.py` to compile a binary, then a Python install won't be necessary anymore to run this whole pipeline (binaries can be compiled on Windows, Linux and Mac - use Miniconda to produce a minimally sized binary). For Windows, the compiled binary is already provided. This pipeline is also interesting to see how it is possible to fully automate graphical results generation in SPM.
 
