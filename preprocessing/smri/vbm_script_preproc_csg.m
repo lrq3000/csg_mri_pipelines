@@ -41,9 +41,9 @@ clear classes;
 % Initialization variables, PLEASE EDIT ME
 rootpath_multi = 'X:\Path\To\MultipleSubjectsData'; % Set here the path to a directory of multiple groups, subjects and sessions to process multiple subjects at once. In this case, this should follow the same structure as the fmri preprocessing script: rootpath_multi/<Group>/<Subject>/data/<Session>/mprage/*.(nii|img) . Else set to empty string to rather use rootpath_single, or set to 'gui' to use SPM gui to easily select a folder.
 rootpath_single = 'X:\Path\To\OneSubject\mprage\T1.nii'; % If you want to process only one subject, set here the full path to the T1 (extension: nii or img). Set to 'gui' to easily select a folder.
-controlspath_greyonly = 'X:\Path\To\VBM_Controls\'; % controls images, must be generated using the same template AND grey only. If you don't have these images, run this pipeline on a set of healthy volunteers' T1 images with skip2ndlevel set to 1. Also this path is useless if skip2ndlevel is set to 1.
-controlspath_greywhite = 'X:\Path\To\VBM_Controls_WhitePlusGrey\'; % controls images, grey + white, only necessary if you set skipgreypluswhite = 0. Skipped if skip2ndlevel = 1 or skipgreypluswhite = 1.
-path_to_spm = 'C:\matlab_tools\spm12_fdr'; % change to spm8 or spm12 path depending on what script_mode you choose (respectively spm8 for script_mode 0 or spm12 for script_mode 1)
+controlspath_greyonly = 'X:\Path\To\VBM_Controls'; % controls images, must be generated using the same template AND grey only. If you don't have these images, run this pipeline on a set of healthy volunteers' T1 images with skip2ndlevel set to 1. Also this path is useless if skip2ndlevel is set to 1.
+controlspath_greywhite = 'X:\Path\To\VBM_Controls_WhitePlusGrey'; % controls images, grey + white, only necessary if you set skipgreypluswhite = 0. Skipped if skip2ndlevel = 1 or skipgreypluswhite = 1.
+path_to_spm = 'C:\matlab_tools\spm12_fdr'; % change to spm8 or spm12 path depending on what script_mode you choose (respectively spm8 for script_mode 0 or spm12 for script_mode 1). If you want voxel-wise FDR, don't forget to set topoFDR to 0 in spm_defaults.m
 path_to_vbm8 = 'C:\matlab_tools\spm8\toolbox\vbm8'; % only necessary if script_mode == 0
 path_to_cat12 = 'C:\matlab_tools\spm12_fdr\toolbox\cat12'; % only necessary if script_mode == 1
 script_mode = 1; % 0: SPM8+VBM8(DARTEL), 1: SPM12+CAT12(SHOOT, successor of DARTEL), ref: https://www.researchgate.net/post/MR_brain_volume_spatial_normalization
