@@ -24,7 +24,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself Python is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.3.7
+% v1.3.8
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2020
 % LICENSE: MIT
@@ -58,7 +58,7 @@ skipresults = 0; % if you do not want to generate the result images from the 2nd
 parallel_processing = false; % enable parallel processing between multiple subjects (num_cores need to be set to 0 to disable parallel processing inside CAT12, so we can parallelize outside!)
 ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization, 'subj' for the average of subjects (might be incompatible with CAT12 as it is not offered on the GUI)
 cat12_spm_preproc_accuracy = 0.75; % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12). Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases - from script's author's own tests, there is not much visible difference).
-autoreorient = false; % automatically reorient the structural before preprocessing? Requires the prior installation of https://github.com/lrq3000/spm_auto_reorient_coregister
+autoreorient = false; % automatically reorient the structural before preprocessing? Requires the prior installation of https://github.com/lrq3000/spm_auto_reorient_coregister - note: works only with SPM12 (script_mode 1)
 
 if script_mode == 0
     path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii'; % relative to spm path
@@ -86,11 +86,15 @@ fprintf(1, '\n=== VBM PREPROCESSING AND ANALYSIS ===\n');
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
 bakpath = path; % backup the current path variable
 restoredefaultpath(); matlabpath(strrep(matlabpath, userpath, '')); % clean up the path
-addpath(path_to_spm); % add the path to SPM8
+addpath(path_to_spm); % add the path to SPM12 or SPM8
 if script_mode == 0
     addpath(path_to_vbm8); % add the path to VBM8
 elseif script_mode == 1
     addpath(path_to_cat12); % add the path to CAT12
+end
+if autoreorient
+    % For autoreorient script, we need to add the SPM12 OldNorm toolbox in the path
+    addpath(fullfile(path_to_spm, 'toolbox', 'OldNorm'));
 end
 
 % Start logging
