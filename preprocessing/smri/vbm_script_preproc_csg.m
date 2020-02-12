@@ -24,7 +24,7 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself Python is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.3.6
+% v1.3.7
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
 % 2017-2020
 % LICENSE: MIT
@@ -39,8 +39,8 @@ clear all;
 clear classes;
 
 % Initialization variables, PLEASE EDIT ME
-rootpath_multi = 'X:\Path\To\MultipleSubjectsData'; % Set here the path to a directory of multiple groups, subjects and sessions to process multiple subjects at once. Else set to empty string to rather use rootpath_single. In this case, this should follow the same structure as the fmri preprocessing script: rootpath_multi/<Group>/<Subject>/data/<Session>/mprage/*.(nii|img)
-rootpath_single = 'X:\Path\To\OneSubject\mprage\T1.nii'; % If you want to process only one subject, set here the full path to the T1 (extension: nii or img).
+rootpath_multi = 'X:\Path\To\MultipleSubjectsData'; % Set here the path to a directory of multiple groups, subjects and sessions to process multiple subjects at once. In this case, this should follow the same structure as the fmri preprocessing script: rootpath_multi/<Group>/<Subject>/data/<Session>/mprage/*.(nii|img) . Else set to empty string to rather use rootpath_single, or set to 'gui' to use SPM gui to easily select a folder.
+rootpath_single = 'X:\Path\To\OneSubject\mprage\T1.nii'; % If you want to process only one subject, set here the full path to the T1 (extension: nii or img). Set to 'gui' to easily select a folder.
 controlspath_greyonly = 'X:\Path\To\VBM_Controls\'; % controls images, must be generated using the same template AND grey only. If you don't have these images, run this pipeline on a set of healthy volunteers' T1 images with skip2ndlevel set to 1. Also this path is useless if skip2ndlevel is set to 1.
 controlspath_greywhite = 'X:\Path\To\VBM_Controls_WhitePlusGrey\'; % controls images, grey + white, only necessary if you set skipgreypluswhite = 0. Skipped if skip2ndlevel = 1 or skipgreypluswhite = 1.
 path_to_spm = 'C:\matlab_tools\spm12_fdr'; % change to spm8 or spm12 path depending on what script_mode you choose (respectively spm8 for script_mode 0 or spm12 for script_mode 1)
@@ -71,6 +71,14 @@ end
 
 if parallel_processing
     num_cores = 0; % disabling CAT12 parallel processing if we parallelize outside
+end
+
+% use spm gui to select files
+if strcmpi(rootpath_single, 'gui') == 1
+    rootpath_single = spm_select(1, 'image', 'Select nifti file of structural (FLAWS INV2 or MPRAGE)');
+end
+if strcmpi(rootpath_multi, 'gui') == 1
+    rootpath_multi = spm_select(1, 'dir', 'Select directory of structurals in BIDS-like organization')
 end
 
 % --- Start of main script
