@@ -37,7 +37,7 @@ brightness = 2.0  # how much to raise brightness of the bottom images
 contrast = 1.5
 
 # Get arguments
-if len(sys.argv) < 0:
+if len(sys.argv) < 4:
     raise ValueError('Not enough arguments supplied: need to specify 3 arguments: 1- the rootpath of the images, 2- the images prefix, 3- the script mode (0 or 1)')
 impath = sys.argv[1]
 imprefix = sys.argv[2]
