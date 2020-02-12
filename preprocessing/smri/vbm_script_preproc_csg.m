@@ -24,9 +24,9 @@ function vbm_script_preproc_csg()
 % You also need Python (and add it to the PATH! Must be callable from cmd.exe with a simple "python" command) and PILLOW (not PIL! Just do `conda install pillow` or `pip install pillow`) to generate the final stitched image, but if you want to do it yourself Python is not needed.
 %
 % STEPHEN KARL LARROQUE
-% v1.3.5
+% v1.3.6
 % First version on: 2017-01-24 (first version of script based on batch from predecessors)
-% 2017-2019
+% 2017-2020
 % LICENSE: MIT
 %
 % Inspired from a pipeline by Mohamed Ali BAHRI.
@@ -491,7 +491,12 @@ for t=1:length(T1fileslist)
                 % Call Python script to generate final image
                 fprintf('Generating final image using Python...\n');
                 imprefix = ['img_type' int2str(i) '_'];
-                callPython(fullfile('vbm_gen_final_image.py'), ['"' rootpath '" "' imprefix '" "' int2str(script_mode) '"'])
+                % Use the precompiled binary if available
+                if exist(fullfile('vbm_gen_final_image.exe'), 'file') == 2
+                    callCommand(fullfile('vbm_gen_final_image.exe'), ['"' rootpath '" "' imprefix '" "' int2str(script_mode) '"'])
+                else % else, call the non-compiled python script
+                    callPython(fullfile('vbm_gen_final_image.py'), ['"' rootpath '" "' imprefix '" "' int2str(script_mode) '"'])
+                end %endif
             end
         end
     end %endfor each analysis (grey only or grey+white)
@@ -708,5 +713,14 @@ function callPython(scriptpath, arguments)
     [status, commandOut] = system(commandStr);
     if status==1
         fprintf('ERROR: Python call probably failed, return code is %d and error message:\n%s\n',int2str(status),commandOut);
+    end
+end
+
+function callCommand(commandIn, arguments)
+% Call a command with given arguments
+    commandStr = [commandIn ' ' arguments];
+    [status, commandOut] = system(commandStr);
+    if status==1
+        fprintf('ERROR: Command call probably failed, return code is %d and error message:\n%s\n',int2str(status),commandOut);
     end
 end
