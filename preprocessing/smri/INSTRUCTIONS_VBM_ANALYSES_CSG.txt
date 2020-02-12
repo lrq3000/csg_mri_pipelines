@@ -1,0 +1,24 @@
+INSTRUCTIONS FOR VBM/CAT12 STRUCTURAL MRI ANALYSIS FOR SINGLE SUBJECT COMA PATIENTS FOR THE COMA SCIENCE GROUP, HOSPITAL OF LIEGE
+==================================================================
+
+1. use MRIConvert or dcm2niix to convert DICOMs (files acquired from MRI machine) to nifti files. This will create a subfolder with FLAWS INV2 in the folder name, and inside a .nii file.
+2. Open MATLAB
+3. type in MATLAB:
+cd 'Z:\Research\CSG\Data\2-ANALYSES\MRI\vbm\pipeline\smri'
+vbm_script_preproc_csg
+4. select the FLAWS INV2 nifti file you just converted from the patient DICOMs. If there are multiple such folders, select the last one (most bottom one).
+5. wait for the script to complete
+6. at the end, the script will ask for a control's structural of same sex and similar age. You can find one out of the 40 control images in the folder 'Z:\Research\CSG\Data\2-ANALYSES\MRI\vbm\pipeline\CTR_40sbj_meanage45.2_structonly', each folder has a name including 'M' for male, 'F' for female, and a 2 digits number for the age (some controls are missing some info, simply don't use them).
+7. open the patient's nifti folder (the one you created when you converted from DICOMs at step 1), and inside the 'mri' subfolder, find the image 'img_type1_final.png', this is the final results image.
+
+Tip: to run analyses faster, you can copy the whole content of the 'Z:\Research\CSG\Data\2-ANALYSES\MRI\vbm\pipeline' folder onto your local hard disk (ie, on your computer), and run the script from there, without modifying anything, it should work fine (ie, it's using relative paths).
+
+Tip2: check if the reorientation was correct by opening the FLAWS INV2 nifti file, for example with MRIcroN
+
+Tip3: in the report subfolder (in the patient's nifti folder), you will find a pdf file with the GM/WM/CSF/WMH (lesions) volumes.
+
+Tip4: you can visually see the segmentation of GM/WM/CSF and WMH (lesions) in subject's space, by opening in the mri subfolder the file rp0*rigid.nii, and then loading as colored overlays the files rp1*rigid.nii (GM), rp2*rigid.nii (WM), rp3*rigid.nii (CSF) and rp7*rigid.nii (WMH = lesions).
+
+By Stephen Karl Larroque
+First written on 12/02/2020
+Further code development may become available online at https://github.com/lrq3000/csg_mri_pipelines
