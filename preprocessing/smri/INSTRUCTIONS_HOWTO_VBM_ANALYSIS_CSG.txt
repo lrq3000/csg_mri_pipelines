@@ -5,7 +5,7 @@ INSTRUCTIONS - HOW TO DO VBM/CAT12 STRUCTURAL MRI ANALYSIS FOR SINGLE SUBJECT CO
 2. Open MATLAB
 3. type in MATLAB:
 cd 'Z:\Research\CSG\Data\2-ANALYSES\MRI\vbm\pipeline\smri'
-vbm_script_preproc_csg
+vbm_script_preproc_csg_relativepaths
 4. select the FLAWS INV2 nifti file you just converted from the patient DICOMs. If there are multiple such folders, select the last one (most bottom one).
 5. wait for the script to complete
 6. at the end, the script will ask for a control's structural of same sex and similar age. You can find one out of the 40 control images in the folder 'Z:\Research\CSG\Data\2-ANALYSES\MRI\vbm\pipeline\CTR_40sbj_meanage45.2_structonly', each folder has a name including 'M' for male, 'F' for female, and a 2 digits number for the age (some controls are missing some info, simply don't use them).
