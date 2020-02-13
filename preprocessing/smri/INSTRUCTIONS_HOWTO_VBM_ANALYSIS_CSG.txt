@@ -1,4 +1,4 @@
-INSTRUCTIONS FOR VBM/CAT12 STRUCTURAL MRI ANALYSIS FOR SINGLE SUBJECT COMA PATIENTS FOR THE COMA SCIENCE GROUP, HOSPITAL OF LIEGE
+INSTRUCTIONS - HOW TO DO VBM/CAT12 STRUCTURAL MRI ANALYSIS FOR SINGLE SUBJECT COMA PATIENTS FOR THE COMA SCIENCE GROUP, HOSPITAL OF LIEGE
 ==================================================================
 
 1. use MRIConvert or dcm2niix to convert DICOMs (files acquired from MRI machine) to nifti files. This will create a subfolder with FLAWS INV2 in the folder name, and inside a .nii file.

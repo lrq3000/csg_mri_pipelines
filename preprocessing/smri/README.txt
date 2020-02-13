@@ -17,7 +17,7 @@ Then edit vbm_script_preproc_csg.m variables in the beginning of the script to f
 
 Note this pipeline is also interesting to see how it is possible to fully automate graphical results generation in SPM.
 
-=== How to make a self-contained install (almost fully automated and unattended) ===
+=== How to make a self-contained portable install (almost fully automated and unattended) ===
 
 It's possible to make a self-contained install that requires only MATLAB to run, and can even be placed on a shared network drive such as samba.
 
