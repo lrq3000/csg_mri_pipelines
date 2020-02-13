@@ -1,4 +1,4 @@
-function vbm_script_preproc_csg()
+function vbm_script_preproc_csg_relativepaths()
 %
 % Script for voxel based morphometric analysis of a single patient/subject, compared to a group of controls. Needs SPM8 and VBM8.
 % T1 of patient in nifti format needs to be provided (no conversion is done from DICOM here).
@@ -43,13 +43,13 @@ clear classes;
 parentDir = fileparts(fileparts(which(mfilename)));
 
 % PARAMETERS, PLEASE EDIT ME
-rootpath_multi = 'X:\Path\To\MultipleSubjectsData'; % Set here the path to a directory of multiple groups, subjects and sessions to process multiple subjects at once. In this case, this should follow the same structure as the fmri preprocessing script: rootpath_multi/<Group>/<Subject>/data/<Session>/mprage/*.(nii|img) . Else set to empty string to rather use rootpath_single, or set to 'gui' to use SPM gui to easily select a folder.
-rootpath_single = 'X:\Path\To\OneSubject\mprage\T1.nii'; % If you want to process only one subject, set here the full path to the T1 (extension: nii or img). Set to 'gui' to easily select a folder.
-controlspath_greyonly = 'X:\Path\To\VBM_Controls'; % controls images, must be generated using the same template AND grey only. If you don't have these images, run this pipeline on a set of healthy volunteers' T1 images with skip2ndlevel set to 1. Also this path is useless if skip2ndlevel is set to 1.
+rootpath_multi = ''; % Set here the path to a directory of multiple groups, subjects and sessions to process multiple subjects at once. In this case, this should follow the same structure as the fmri preprocessing script: rootpath_multi/<Group>/<Subject>/data/<Session>/mprage/*.(nii|img) . Else set to empty string to rather use rootpath_single, or set to 'gui' to use SPM gui to easily select a folder.
+rootpath_single = 'gui'; % If you want to process only one subject, set here the full path to the T1 (extension: nii or img). Set to 'gui' to easily select a folder.
+controlspath_greyonly = fullfile(parentDir, 'Controls_VIDA_CAT12_10subj', 'Final'); % controls images, must be generated using the same template AND grey only. If you don't have these images, run this pipeline on a set of healthy volunteers' T1 images with skip2ndlevel set to 1. Also this path is useless if skip2ndlevel is set to 1.
 controlspath_greywhite = 'X:\Path\To\VBM_Controls_WhitePlusGrey'; % controls images, grey + white, only necessary if you set skipgreypluswhite = 0. Skipped if skip2ndlevel = 1 or skipgreypluswhite = 1.
-path_to_spm = 'C:\matlab_tools\spm12_fdr'; % change to spm8 or spm12 path depending on what script_mode you choose (respectively spm8 for script_mode 0 or spm12 for script_mode 1). If you want voxel-wise FDR, don't forget to set topoFDR to 0 in spm_defaults.m
+path_to_spm = fullfile(parentDir, 'external', 'spm12'); % change to spm8 or spm12 path depending on what script_mode you choose (respectively spm8 for script_mode 0 or spm12 for script_mode 1). If you want voxel-wise FDR, don't forget to set topoFDR to 0 in spm_defaults.m
 path_to_vbm8 = 'C:\matlab_tools\spm8\toolbox\vbm8'; % only necessary if script_mode == 0
-path_to_cat12 = 'C:\matlab_tools\spm12_fdr\toolbox\cat12'; % only necessary if script_mode == 1
+path_to_cat12 = fullfile(path_to_spm, 'toolbox', 'cat12'); % only necessary if script_mode == 1
 script_mode = 1; % 0: SPM8+VBM8(DARTEL), 1: SPM12+CAT12(SHOOT, successor of DARTEL), ref: https://www.researchgate.net/post/MR_brain_volume_spatial_normalization
 num_cores = 0; % number of cores to use for parallel calculation in CAT12: use 0 to disable. For VBM8, multi-threading is always enabled and the number of cores cannot be chosen. IMPORTANT: on CAT12 before v12.6, there is an issue with parallelization, if you set num_cores > 0 the script will crash after preprocessing, so meanwhile please keep this at 0! (you can still set parallel_processing == true to parallelize between subjects).
 smoothsize = 12; % 12 for patients with damaged brains, 8 or 10 for healthy volunteers
@@ -62,7 +62,7 @@ skipresults = 0; % if you do not want to generate the result images from the 2nd
 parallel_processing = false; % enable parallel processing between multiple subjects (num_cores need to be set to 0 to disable parallel processing inside CAT12, so we can parallelize outside!)
 ethnictemplate = 'mni'; % 'mni' for European brains, 'eastern' for East Asian brains, 'none' for no regularization, '' for no affine regularization, 'subj' for the average of subjects (might be incompatible with CAT12 as it is not offered on the GUI)
 cat12_spm_preproc_accuracy = 0.75; % SPM preprocessing accuracy, only if script_mode == 1 (using CAT12). Use 0.5 for average (default, good for healthy subjects, fast about 10-20min per subject), or 0.75 or 1.0 for respectively higher or highest quality, but slower processing time (this replaces the sampling distance option in previous CAT12 releases - from script's author's own tests, there is not much visible difference).
-autoreorient = false; % automatically reorient the structural before preprocessing? Requires the prior installation of https://github.com/lrq3000/spm_auto_reorient_coregister - note: works only with SPM12 (script_mode 1)
+autoreorient = true; % automatically reorient the structural before preprocessing? Requires the prior installation of https://github.com/lrq3000/spm_auto_reorient_coregister - note: works only with SPM12 (script_mode 1)
 
 if script_mode == 0
     path_to_tissue_proba_map = 'toolbox/Seg/TPM.nii'; % relative to spm path
