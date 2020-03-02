@@ -19,6 +19,7 @@ function [slice_order, TR, nslices, slice_order_type, slice_timing] = autodetect
 % TODO:
 % * For MATLAB > 2016, use native jsonload!
 % * Detect if NIFTI-1 then raise error and return
+% * autodetect if multiband
 %
 
 % Load jsonlab, to support BIDS on MATLAB < R2016
