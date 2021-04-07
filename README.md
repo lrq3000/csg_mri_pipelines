@@ -73,6 +73,6 @@ For a more extensive tutorial on the basics of DTI preprocessing and analysis, s
 
 ## Author and licensing
 
-These pipelines were made by Stephen Karl Larroque. The author is indebted to Mohamed Ali Bahri who provided pipelines and education that inspired these pipelines (that were written from the ground up).
+These pipelines were made by Stephen Karl Larroque. The author is indebted to [Professor Mohamed Ali Bahri](https://gitlab.uliege.be/M.Bahri) who provided pipelines and education that inspired these pipelines (that were written from the ground up).
 
 All tools are licensed under the open-source MIT License (but not necessarily the required/optional libraries, please check their own licenses).
