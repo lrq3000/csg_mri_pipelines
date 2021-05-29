@@ -1,0 +1,27 @@
+{
+    "creators": [
+        {
+          "affiliation": "Coma Science Group (GIGA-Consciousness, ULg) & Centre du Cerveau² (CHU)",
+          "name": "Larroque, Stephen Karl",
+          "orcid": "0000-0002-6248-0957"
+        }
+    ],
+    "keywords": [
+        "Magnetic Resonance Imagery",
+        "MRI",
+        "analysis",
+        "pipeline",
+        "functional MRI",
+        "fMRI",
+        "diffusion MRI",
+        "dMRI",
+        "structural MRI",
+        "sMRI",
+        "VBM",
+        "CAT12",
+        "SPM12",
+        "SPM8"
+    ],
+    "license": "MIT",
+    "upload_type": "software
+}
