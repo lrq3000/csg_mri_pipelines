@@ -1,5 +1,7 @@
 # Coma Science Group MRI pipelines
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4885120.svg)](https://doi.org/10.5281/zenodo.4885120)
+
 Magnetic Resonance Imagery (MRI) preprocessing and analysis pipelines and tools for the study of disorders of consciousness.
 
 ## Description
@@ -76,3 +78,9 @@ For a more extensive tutorial on the basics of DTI preprocessing and analysis, s
 These pipelines were made by Stephen Karl Larroque. The author is indebted to [Professor Mohamed Ali Bahri](https://gitlab.uliege.be/M.Bahri) who provided pipelines and education years before that inspired these pipelines (that were written from the ground up).
 
 All tools are licensed under the open-source MIT License (but not necessarily the required/optional libraries, please check their own licenses).
+
+## Citation
+
+If you found this software useful and use it for a publication, we would be very thankful if you could cite the software as follows, it's a free gesture for you but it tremendously help us in securing grants to further develop it:
+
+> Larroque, Stephen Karl. (2021, May 31). lrq3000/csg_mri_pipelines: CSG MRI pipelines v2.0.1 (20210601) (Version 2.0.1). Zenodo. http://doi.org/10.5281/zenodo.4885120
