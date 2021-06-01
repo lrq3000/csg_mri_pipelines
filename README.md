@@ -83,4 +83,4 @@ All tools are licensed under the open-source MIT License (but not necessarily th
 
 If you found this software useful and use it for a publication, we would be very thankful if you could cite the software as follows, it's a free gesture for you but it tremendously help us in securing grants to further develop it:
 
-> Larroque, Stephen Karl. (2021, May 31). lrq3000/csg_mri_pipelines: CSG MRI pipelines v2.0.1 (20210601) (Version 2.0.1). Zenodo. http://doi.org/10.5281/zenodo.4885120
+> Larroque, Stephen Karl. (2021, May 31). lrq3000/csg_mri_pipelines: CSG MRI pipelines v2.0.1 (20210601) (Version 2.0.1). Zenodo. https://doi.org/10.5281/zenodo.4885119
