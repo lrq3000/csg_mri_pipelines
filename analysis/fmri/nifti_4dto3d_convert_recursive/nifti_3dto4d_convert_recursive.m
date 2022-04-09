@@ -11,9 +11,14 @@ bakpath = path; % backup the current path variable
 restoredefaultpath(); matlabpath(strrep(matlabpath, userpath, '')); % clean up the path
 addpath(spmpath); % add the path to SPM
 
+% Some message
+fprintf('Make sure to delete any __MACOSX hidden folder beforehand, otherwise the script will try to convert fake .nii files and choke.\n');
+fprintf('Walking recursively and converting files, please wait...\n');
+
 % Get list of all folders recursively. We will then grab all the niftis at this level to convert to 4D.
 folderslist = dirPlus(rootpath, 'ReturnDirs', true);
 
+% Main loop
 if numel(folderslist) > 0
     for f=1:numel(folderslist)
         % Get list of all nifti files (NOT recursively, and only .img or .nii files)
