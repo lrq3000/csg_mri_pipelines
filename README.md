@@ -20,7 +20,7 @@ All tools are either in MATLAB or Python.
 
 All tools are licensed under MIT (but not necessarily the required/optional libraries, please check their own licenses).
 
-Literate programming is extensively used, so that you can expect lots of comments inside the scripts itself, so that they should be useable without any external documentation (ie, type `help <script_name>` at the MATLAB or Python prompt to get usage information or read the file's headers).
+Literate programming is extensively used, so that you can expect lots of comments inside the scripts themselves, so that they should be usable without any external documentation (ie, type `help <script_name>` at the MATLAB or Python prompt to get usage information or read the file's headers).
 
 ## Outline of pipelines
 
