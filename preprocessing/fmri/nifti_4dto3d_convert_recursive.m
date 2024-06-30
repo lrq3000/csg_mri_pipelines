@@ -30,6 +30,7 @@ if numel(niftifiles) > 0
         % If the file is a compressed 4D nifti file, don't try to open it. But if not, we check its content to see if it's an uncompressed 4D nifti file.
         nfile = niftifiles{i};
         if strcmpi(nfile(end-6:end), '.nii.gz') || is4D(niftifiles{i})
+            % If the file is a 4D nifti file, add it to the list of 4D nifti files to process afterwards
             idx4d = [idx4d i];
         end
     end %endfor
