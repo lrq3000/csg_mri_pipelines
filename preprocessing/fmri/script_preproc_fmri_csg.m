@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2024
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2024
-% v2.4.5
+% v2.4.6
 % License: MIT
 %
 % TODO:
@@ -84,8 +84,8 @@ smoothingkernel = 8;
 % Resize/resample/reslice functionals to 3x3x3 before smoothing
 % NOTE: if you have multiband BOLD, please disable this, else your BOLD may end up being cut in half!
 resizeto3 = false;
-% Parallel preprocessing?
-parallel_processing = true;
+% Parallel preprocessing? Tip: disable when having errors to ease debugging.
+parallel_processing = false;
 % ART input files
 art_before_smoothing = true; % At CSG, we always did ART on post-smoothed data, but according to Alfonso Nieto-Castanon, ART should be done before smoothing: https://www.nitrc.org/forum/message.php?msg_id=10652
 % Skip preprocessing steps (to do only post-processing?) - useful in case
@@ -122,13 +122,16 @@ elseif script_mode == 1 % for SPM12 OldSeg
     path_to_tpm_grey_white_csf = 'toolbox/OldSeg'; % relative to spm path
 elseif (script_mode == 2) || (script_mode == 2.5) % for SPM12+CAT12
     if ~realignunwarp
-        path_to_batch = 'batch_preproc_spm12_CAT12Dartel.mat'; % relative to this script path
+        path_to_batch = 'batch_preproc_spm12_CAT12Dartel_2024.mat'; % relative to this script path
     else
-        path_to_batch = 'batch_preproc_spm12_CAT12Dartel_unwarp.mat'; % relative to this script path
+        path_to_batch = 'batch_preproc_spm12_CAT12Dartel_2024_unwarp.mat'; % relative to this script path
     end
     path_to_tissue_proba_map = 'tpm/TPM.nii'; % relative to spm path
-    path_to_dartel_template = 'toolbox/cat12/templates_1.50mm/Template_1_IXI555_MNI152.nii';
-    path_to_shooting_template = 'toolbox/cat12/templates_1.50mm/Template_0_IXI555_MNI152_GS.nii'; % relative to cat12 path
+    path_to_dartel_template = 'toolbox/cat12/templates_MNI152NLin2009cAsym/Template_1_Dartel.nii';
+    path_to_shooting_template = 'toolbox/cat12/templates_MNI152NLin2009cAsym/Template_0_GS.nii'; % relative to cat12 path
+    path_to_wmh_tpm = 'toolbox/cat12/templates_MNI152NLin2009cAsym/cat_wmh_miccai2017.nii';
+    path_to_bv_tpm = 'toolbox/cat12/templates_MNI152NLin2009cAsym/cat_bloodvessels.nii';
+    path_to_sl_tpm = 'toolbox/cat12/templates_MNI152NLin2009cAsym/cat_strokelesions_ATLAS303.nii';
 elseif script_mode == 3 % for SPM12 UniSeg
     if ~realignunwarp
         path_to_batch = 'batch_preproc_spm12_uniseg.mat'; % relative to this script path
@@ -237,21 +240,21 @@ end
 % Preprocessing Jobs preparation loop!
 fprintf(1, '\n\n-----------------\n=== PREPARING PREPROCESSING JOBS ===\n\n');
 spm_jobman('initcfg'); % init the jobman
-matlabbatchall_counter = 0;
-matlabbatchall = {};
+matlabbatchall_counter = 0; % we use this to be able to load multiple different batch files. The steps are in the next sublevel of the batch cell array.
+matlabbatchall = {}; % cell array containing all batch files we will load here, to be able to run them all in a row
 matlabbatchall_infos = {};
 for c = 1:length(conditions) % loop over all conditions/groups
     % Get the data structure for all subjects for this condition
     data = get_data(fullfile(root_pth, conditions{c}), subjects{c}, func_dir_regex);
     for isub = 1:size(data, 2) % loop over all subjects
         prevsdata = [];
-        sharedmri = false;
+        sharedmri = false; % tracks whether we already encountered a structural MRI that can be shared across sessions for this subject. It is always false for the first session of any subject, so that this forces to create a de novo batch file, but then if the struct is shared (ie, not inside a session folder but in the subject folder), then the next sessions after the first will reuse the structural (and hence will skip all the very time-consuming segmentation calculations!)
         for isess = 1:length(data(isub).sessions) % loop over all sessions
             fsess = data(isub).sessions{isess};
             for imodal = 1:length(fsess.modalities) % loop over all modalities
                 fprintf(1, '---- PREPARING CONDITION %s SUBJECT %i (%s) SESSION %s MODALITY %s ----\n', conditions{c}, isub, data(isub).name, data(isub).sessions{isess}.id, fsess.modalities{imodal});
 
-                if sharedmri % if sharedmri, we add the new scans to the previous batch job to include a new session (instead of recreating a new separate job). This is important for parallel processing to avoid 2 jobs processing the structural mri in parallel (else the file will be locked and the processing fail), and in addition it saves 2x the time.
+                if sharedmri % if sharedmri, we add the new scans to the previous batch job to include a new session (instead of recreating a new separate job). This is important for parallel processing to avoid 2 jobs processing the structural mri in parallel (else the file will be locked and the processing fail), and in addition it saves 2x the time since we do not have to resegment the structural, which is by far the most time-consuming step.
                     % Add the functional files of this session
                     % Load functional image
                     fdata = get_fdata(data, isub, isess, imodal);
@@ -272,26 +275,36 @@ for c = 1:length(conditions) % loop over all conditions/groups
                     % named file selector named: "Functional" (and not just
                     % "Func" nor "functional" for example!), else you might get
                     % very weird errors (eg, files processed from wrong parent!)
+                    if (script_mode == 2) || (script_mode == 2.5)
+                        slicetimestepidx = 4;
+                    else
+                        slicetimestepidx = 3;
+                    end % endif
                     if script_mode == 0
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1) = cfg_dep;
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tname = 'Session';
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(1).name = 'class';
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(1).value = 'cfg_files';
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(2).name = 'strtype';
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(2).value = 'e';
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).sname = sprintf('Named File Selector: Functional(%i) - Files', isess);
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).src_exbranch = substruct('.','val', '{}',{2}, '.','val', '{}',{1});
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1).src_output = substruct('.','files', '{}',{isess});
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1) = cfg_dep;
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tname = 'Session';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(1).name = 'class';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(1).value = 'cfg_files';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(2).name = 'strtype';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(2).value = 'e';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).sname = sprintf('Named File Selector: Functional(%i) - Files', isess);
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).src_exbranch = substruct('.','val', '{}',{2}, '.','val', '{}',{1});
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).src_output = substruct('.','files', '{}',{isess});
                     elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.scans{isess}(1) = cfg_dep(sprintf('Named File Selector: Functional(%i) - Files', isess), substruct('.','val', '{}',{2}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','files', '{}',{isess}));
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1) = cfg_dep(sprintf('Named File Selector: Functional(%i) - Files', isess), substruct('.','val', '{}',{2}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','files', '{}',{isess}));
                     end
 
-                    % idem for realignment
-                    if ~realignunwarp
-                        matlabbatchall{matlabbatchall_counter}{4}.spm.spatial.realign.estwrite.data{isess}(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', isess), substruct('.','val', '{}',{3}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{isess}, '.','files'));
+                    % idem for realignment (aka slice timing correction)
+                    if (script_mode == 2) || (script_mode == 2.5)
+                        realignstepidx = 5;
                     else
-                        matlabbatchall{matlabbatchall_counter}{4}.spm.spatial.realignunwarp.data(isess).scans(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', isess), substruct('.','val', '{}',{3}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{isess}, '.','files'));
-                        matlabbatchall{matlabbatchall_counter}{4}.spm.spatial.realignunwarp.data(isess).pmscan = '';
+                        realignstepidx = 4;
+                    end % endif
+                    if ~realignunwarp
+                        matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realign.estwrite.data{isess}(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', isess), substruct('.','val', '{}',{slicetimestepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{isess}, '.','files'));
+                    else
+                        matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realignunwarp.data(isess).scans(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', isess), substruct('.','val', '{}',{slicetimestepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{isess}, '.','files'));
+                        matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realignunwarp.data(isess).pmscan = '';
                     end
 
                     % idem for functional images coregistration to structural
@@ -306,9 +319,9 @@ for c = 1:length(conditions) % loop over all conditions/groups
                     % * use Realign: Estimate & Reslice with all options, reslicing all images. Advantage is that we can use masking, which will zero regions that are too much affected by motion, and they are perfectly realigned to the mean BOLD image. Cons are that we interpolate all BOLD images!
                     % We chose the first option (but this may change) by default, or third if you enable realignunwarp.
                     if ~realignunwarp
-                        matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(isess) = cfg_dep(sprintf('Realign: Estimate & Reslice: Realigned Images (Sess %i)', isess), substruct('.','val', '{}',{4}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{isess}, '.','cfiles')); % cfiles = realigned images, rfiles = resliced images
+                        matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(isess) = cfg_dep(sprintf('Realign: Estimate & Reslice: Realigned Images (Sess %i)', isess), substruct('.','val', '{}',{realignstepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{isess}, '.','cfiles')); % cfiles = realigned images, rfiles = resliced images
                     else
-                        matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(isess) = cfg_dep(sprintf('Realign & Unwarp: Unwarped Images (Sess %i)', isess), substruct('.','val', '{}',{4}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{isess}, '.','uwrfiles')); % uwrfiles = unwarped images
+                        matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(isess) = cfg_dep(sprintf('Realign & Unwarp: Unwarped Images (Sess %i)', isess), substruct('.','val', '{}',{realignstepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{isess}, '.','uwrfiles')); % uwrfiles = unwarped images
                     end
 
 % DROPPED due to too much complex coding and maintenance, the Expand Frames
@@ -387,7 +400,7 @@ for c = 1:length(conditions) % loop over all conditions/groups
                     matlabbatchall_infos{matlabbatchall_counter} = sprintf('CONDITION %s SUBJECT %i (%s) SESSION %s MODALITY %s', conditions{c}, isub, data(isub).name, data(isub).sessions{isess}.id, fsess.modalities{imodal});
                     % Modify the SPM batch to fill in the parameters
 
-                    % Load the anatomical MRI
+                    % == Batch step: Load the anatomical MRI
                     if sharedmri
                         % Reuse mri if shared across sessions (placed at same level as conditions)
                         sdata = prevsdata;
@@ -397,7 +410,7 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         prevsdata = sdata;
                     end
                     % Sanity check: ensure only one structural is selected (else
-                    % datat is probably already preprocessed)
+                    % data is probably already preprocessed)
                     if (size(sdata,1) > 1) && ~skip_preprocessing
                         error('Multiple structural images found! Please check your input data, delete previously preprocessed data if necessary.');
                     end
@@ -406,7 +419,8 @@ for c = 1:length(conditions) % loop over all conditions/groups
                     elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
                         matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(sdata)}';
                     end
-                    % Load functional image
+
+                    % == Batch step: Load functional image
                     fdata = get_fdata(data, isub, isess, imodal);
                     % Detect if 4D, we need to expand
                     fdata_nbframes = spm_select_get_nbframes(fdata(1,:));
@@ -420,13 +434,18 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(fdata)};
                     end
 
-                    % Slice time correction:parameters
-                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.nslices = nslices_sess;
-                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.tr = TR_sess;
-                    matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.ta = (TR_sess-(TR_sess/nslices_sess));
+                    % == Batch step: Slice time correction: parameters
+                    if (script_mode == 2) || (script_mode == 2.5)
+                        slicetimestepidx = 4;
+                    else
+                        slicetimestepidx = 3;
+                    end % endif
+                    matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.nslices = nslices_sess;
+                    matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.tr = TR_sess;
+                    matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.ta = (TR_sess-(TR_sess/nslices_sess));
                     if ~isempty(slice_timing)
                         fprintf('Using slice timing (in ms): %s\n', ['[' sprintf('%g, ', slice_timing) ']']);
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.so = slice_timing;
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.so = slice_timing;
                     else
                         slice_order_sess2 = [];
                         if isscalar(slice_order_sess)
@@ -446,11 +465,11 @@ for c = 1:length(conditions) % loop over all conditions/groups
                             slice_order_sess2 = slice_order_sess;
                         end %endif
                         % Set slice order/timing
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.so = slice_order_sess2;
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.so = slice_order_sess2;
                         fprintf('Using slice order: %s\n', ['[' sprintf('%i, ', slice_order_sess2) ']']);
                         % Set reference slice
                         [microtime_onset, microtime_resolution, refslice_sess] = gen_microtime_onset(slice_order_sess2, refslice);
-                        matlabbatchall{matlabbatchall_counter}{3}.spm.temporal.st.refslice = refslice_sess;
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.refslice = refslice_sess;
                         if ~strcmpi(class(refslice), 'char')
                             refslice_str = int2str(refslice);
                         else
@@ -460,6 +479,7 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         fprintf('If you use SPM for statistical analysis, you should set microtime_resolution %i and microtime_onset %i\n', microtime_resolution, microtime_onset);
                     end %endif
 
+                    % == Batch step: Structural preprocessing (CAT12/VBM8/SPM12)
                     % Load segmentation templates
                     if script_mode == 0
                         % VBM config: load custom VBM TPM and DARTEL templates
@@ -471,28 +491,32 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         matlabbatchall{matlabbatchall_counter}{5}.spm.tools.vbm8.estwrite.opts.affreg = ethnictemplate;
                     elseif (script_mode == 2) || (script_mode == 2.5)
                         % CAT12 config: load TPM and DARTEL templates
-                        % Tissue probability map (use native Seg toolbox template)
-                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.tpm = {fullfile(path_to_spm, path_to_tissue_proba_map)};
+                        % Main tissue probability map (use native Seg toolbox template)
+                        matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.opts.tpm = {fullfile(path_to_spm, path_to_tissue_proba_map)};
+                        % Other tissue probability maps (specific to CAT12)
+                        matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.segmentation.WMHtpm = {fullfile(path_to_spm, path_to_wmh_tpm)};
+                        matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.segmentation.BVtpm = {fullfile(path_to_spm, path_to_bv_tpm)};
+                        matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.segmentation.SLtpm = {fullfile(path_to_spm, path_to_sl_tpm)};
                         % Ethnic affine regularization
-                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.affreg = ethnictemplate;
+                        matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.opts.affreg = ethnictemplate;
                         % Dartel template
                         % Deprecated if using shooting template in new releases of CAT12
                         if script_mode == 2
                             % Dartel template
-                            matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {fullfile(path_to_spm, path_to_dartel_template)};
-                            if isfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'shooting')
-                                matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration = rmfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'shooting'); % disable SHOOT
+                            matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.registration.dartel.darteltpm = {fullfile(path_to_spm, path_to_dartel_template)};
+                            if isfield(matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.registration, 'shooting')
+                                matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.registration = rmfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'shooting'); % disable SHOOT
                             end
                         elseif script_mode == 2.5
                             % Geodesic shooting template
-                            matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.shootingtpm = {fullfile(path_to_spm, path_to_shooting_template)};
-                            matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration.shooting.regstr = cat12_shooting_method;
-                            if isfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'dartel')
-                                matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration = rmfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'dartel'); % disable DARTEL
+                            matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.registration.regmethod.shooting.shootingtpm = {fullfile(path_to_spm, path_to_shooting_template)};
+                            matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.registration.regmethod.shooting.regstr = cat12_shooting_method;
+                            if isfield(matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.registration, 'dartel')
+                                matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.extopts.registration = rmfield(matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.extopts.registration, 'dartel'); % disable DARTEL
                             end
                         end
                         % SPM preprocessing accuracy
-                        matlabbatchall{matlabbatchall_counter}{5}.spm.tools.cat.estwrite.opts.accstr = cat12_spm_preproc_accuracy;
+                        matlabbatchall{matlabbatchall_counter}{3}.spm.tools.cat.estwrite.opts.accstr = cat12_spm_preproc_accuracy;
                     elseif script_mode == 1
                         % SPM12 Old segmentation templates config
                         template_seg_list = {'grey.nii', 'white.nii', 'csf.nii'};
