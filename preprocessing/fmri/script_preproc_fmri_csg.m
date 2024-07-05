@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2024
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2024
-% v2.4.7
+% v2.4.8
 % License: MIT
 %
 % TODO:
@@ -66,7 +66,7 @@ func_dir_regex = '(rest|func|task|tennis|navigation)'; % regex to match the func
 %   3: interleaved ascending (bottom -> up): [1:2:nslices 2:2:nslices]
 %   4: interleaved descending (top -> down): [nslices:-2:1, nslices-1:-2:1]
 %   [1 2 ...]: a custom vector to represent your own defined slice order
-%   0: autodetect for each session the slice order to use (then other parameters beginning with slice_* do not matter, except slice_timing which will overwrite slice_order in any case!)
+%   0: autodetect for each session the slice order to use (then other parameters beginning with slice_* do not matter, except slice_timing which will overwrite slice_order in any case! Note that this rarely works on nifti files, often this information is only present in the MRI machine sequence's printout and sometimes in the BIDS json or DICOMs)
 slice_order = 0;
 slice_hstep = 2;  % if interleaved: horizontal step, ie, to reduce tissue excitation artefact, scanners can skip each x slice at the first scan, then scan these slices at subsequent runs. Usually set at 2 but if faster FMRI acquisition, the hstep can be higher.
 slice_vstep = 1;  % if interleaved: vertical step (usually 1 except if fast FMRI TR like 800ms)
@@ -248,15 +248,30 @@ for c = 1:length(conditions) % loop over all conditions/groups
     data = get_data(fullfile(root_pth, conditions{c}), subjects{c}, func_dir_regex);
     for isub = 1:size(data, 2) % loop over all subjects
         prevsdata = [];
-        sharedmri = false; % tracks whether we already encountered a structural MRI that can be shared across sessions for this subject. It is always false for the first session of any subject, so that this forces to create a de novo batch file, but then if the struct is shared (ie, not inside a session folder but in the subject folder), then the next sessions after the first will reuse the structural (and hence will skip all the very time-consuming segmentation calculations!)
+        sharedmri_sess = false; % tracks whether we already processed a structural MRI that can be shared across sessions for this subject. It is always false for the first session of any subject, so that this forces to create a de novo batch file, but then if the struct is shared (ie, not inside a session folder but in the subject folder), then the next sessions after the first will reuse the structural (and hence will skip all the very time-consuming segmentation calculations!)
         for isess = 1:length(data(isub).sessions) % loop over all sessions
             fsess = data(isub).sessions{isess};
+            sharedmri_mod = false; % tracks whether we already processed a structural MRI that can be reused across modalities
             for imodal = 1:length(fsess.modalities) % loop over all modalities
                 fprintf(1, '---- PREPARING CONDITION %s SUBJECT %i (%s) SESSION %s MODALITY %s ----\n', conditions{c}, isub, data(isub).name, data(isub).sessions{isess}.id, fsess.modalities{imodal});
 
-                if sharedmri % if sharedmri, we add the new scans to the previous batch job to include a new session (instead of recreating a new separate job). This is important for parallel processing to avoid 2 jobs processing the structural mri in parallel (else the file will be locked and the processing fail), and in addition it saves 2x the time since we do not have to resegment the structural, which is by far the most time-consuming step.
-                    % Add the functional files of this session
-                    % Load functional image
+                if sharedmri_sess || sharedmri_mod % if sharedmri_sess or sharedmri_mod, we add the new scans to the previous batch job to include a new session (instead of recreating a new separate job). This is important for parallel processing to avoid 2 jobs processing the structural mri in parallel (else the file will be locked and the processing fail), and in addition it saves 2x the time since we do not have to resegment the structural, which is by far the most time-consuming step.
+                    % This if condition branch gets activated only if there are multiple sessions or modalities reusing the same already preprocessed structural image
+                    % The preprocessing of the structural image is not yet skipped in code but when mode is 2 or 2.5 (using CAT12) then duplicate sMRI preprocessing is skipped thanks to LazyProcessing being enabled.
+                    % Otherwise, for all other modes, the sMRI will be reprocessed again.
+                    % TODO: avoid reprocessing the structural MRI if it is shared across sessions or modalities.
+
+                    % == Batch step: Load the anatomical MRI
+                    % Reuse mri if shared across sessions (placed at same level as conditions)
+                    sdata = prevsdata;
+                    if script_mode == 0
+                        matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.cfg_named_file.files = transpose({cellstr(sdata)});
+                    elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
+                        matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(sdata)}';
+                    end
+
+                    % == Batch step: Load functional image
+                    % Add the functional files of this session/modality
                     fdata = get_fdata(data, isub, isess, imodal);
                     % Detect if 4D, we need to expand
                     fdata_nbframes = spm_select_get_nbframes(fdata(1,:));
@@ -270,6 +285,7 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.file_dir.file_ops.cfg_named_file.files{isess} = cellstr(fdata);
                     end
 
+                    % == Batch step: Slice time correction
                     % add new session into slice timing
                     % IMPORTANT: make sure all batches have the functional
                     % named file selector named: "Functional" (and not just
@@ -294,7 +310,8 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1) = cfg_dep(sprintf('Named File Selector: Functional(%i) - Files', isess), substruct('.','val', '{}',{2}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','files', '{}',{isess}));
                     end
 
-                    % idem for realignment (aka slice timing correction)
+                    % == Batch step: Realignment
+                    % idem for realignment
                     if (script_mode == 2) || (script_mode == 2.5)
                         realignstepidx = 5;
                     else
@@ -307,6 +324,7 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realignunwarp.data(isess).pmscan = '';
                     end
 
+                    % == Batch step: Coregistration
                     % idem for functional images coregistration to structural
                     if (script_mode == 1) || (script_mode == 3)
                         coregbaseidx = 5;
@@ -374,7 +392,7 @@ for c = 1:length(conditions) % loop over all conditions/groups
 %                     %matlabbatch{6}.spm.spatial.realign.estwrite.data{2}(1).src_output = substruct('type', '()', 'subs', {{isess}})
 %                 end
 
-                else  % not shared mri, we create a new batch/job
+                else  % no already preprocessed shared mri available, we create a new batch/job (either it's the first session or modality, or there is a separate structural MRI for each, depending on where the structural MRI is placed in the folders tree)
                     % Autodetection? If not, then load the specified arguments
                     if nslices > 0
                         nslices_sess = nslices;
@@ -401,14 +419,9 @@ for c = 1:length(conditions) % loop over all conditions/groups
                     % Modify the SPM batch to fill in the parameters
 
                     % == Batch step: Load the anatomical MRI
-                    if sharedmri
-                        % Reuse mri if shared across sessions (placed at same level as conditions)
-                        sdata = prevsdata;
-                    else
-                        % Else generate the list of mri for this session
-                        [sdata, sharedmri] = get_mri(data, isub, isess);
-                        prevsdata = sdata;
-                    end
+                    % Generate the list of mri for this session
+                    [sdata, sharedmri_sess] = get_mri(data, isub, isess);
+                    prevsdata = sdata; % memoize in case the structural MRI can be shared across sessions/modalities
                     % Sanity check: ensure only one structural is selected (else
                     % data is probably already preprocessed)
                     if (size(sdata,1) > 1) && ~skip_preprocessing
@@ -434,7 +447,7 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(fdata)};
                     end
 
-                    % == Batch step: Slice time correction: parameters
+                    % == Batch step: Slice time correction
                     if (script_mode == 2) || (script_mode == 2.5)
                         slicetimestepidx = 4;
                     else
@@ -556,7 +569,9 @@ for c = 1:length(conditions) % loop over all conditions/groups
                             %matlabbatchall{matlabbatchall_counter}{8}.spm.spatial.smooth.prefix = ['s' int2str(smoothingkernel)];
                         %end
                     end
-                end %end if sharedmri
+
+                    sharedmri_mod = true; % reuse the structural MRI for the next modalities
+                end %end if sharedmri_sess || sharedmri_mod
 
                 % Saving temporary batch (allow to introspect later on in case of issues)
                 save_batch(fullfile(root_pth, 'JOBS'), matlabbatchall{matlabbatchall_counter}, 'preproc', script_mode, data(isub).name, isess, imodal);
@@ -853,14 +868,14 @@ function [matched_dirs] = get_subdirs_regex(dirpath, regex)
     matched_dirs = subdir_names(~cellfun(@isempty, regexp(subdir_names, regex)));
 end
 
-function [sdata, sharedmri] = get_mri(data, isub, isess)
+function [sdata, sharedmri_sess] = get_mri(data, isub, isess)
     % Get the structural subdirectory - first try to find a structural per session
     dirpath = fullfile(data(isub).sessions{isess}.dir, 'mprage');
-    sharedmri = false;
+    sharedmri_sess = false;
     if ~exist(dirpath, 'dir')
         % If there is no structural for this session, try to find a shared structural for all sessions (in the directory above)
         dirpath = fullfile(data(isub).dir, 'mprage');
-        sharedmri = true;
+        sharedmri_sess = true;
         if ~exist(dirpath, 'dir')
             error('Error: No structural mprage directory for subject %s.', data(isub).name);
         end
