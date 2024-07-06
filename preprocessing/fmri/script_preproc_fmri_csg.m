@@ -9,7 +9,7 @@ function script_preproc_fmri_csg()
 % fmri data using the art toolbox (composite motion measures). According to Alfonso Nieto-Castanon: �It is similar to framewise displacement but not exactly the same ("framewise displacement" converts angular differences to mm by multiplying by a constant factor -projecting to a sphere-, and then sums the 6 individual translation/rotation displacement absolute measures; ART's "composite motion" measure estimates instead the maximum voxel displacement resulting from the combined effect of the individual translation and rotation displacement measures)�. Ref: https://www.nitrc.org/forum/forum.php?thread_id=5792&forum_id=398
 %
 % DATA IN root_pth, AKA ROOT DIRECTORY, MUST BE ORGANIZED AS FOLLOWS:
-% /root_pth/<condition>/<subject_id>/data/<sess_id>/(mprage|rest)/*.(img|hdr|nii) -- Note: mprage for structural MRI, rest for fMRI BOLD EPI
+% /root_pth/<condition>/<subject_id>/data/<sess_id>/(mprage|rest|task1|task2|anything)/*.(img|hdr|nii) -- Note: mprage for structural MRI, rest for fMRI BOLD EPI, task1 or task2 or anything is any other modality or tasks (the possible modalities can be specified as a regex in func_dir_regex)
 %
 % EXAMPLES:
 % /root_pth/CONTROLS/ELIZABETH/data/session1/rest/somenifti.nii (for the fMRI data)
