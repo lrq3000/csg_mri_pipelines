@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2024
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2024
-% v2.4.8
+% v2.5.0
 % License: MIT
 %
 % TODO:
@@ -41,6 +41,7 @@ function script_preproc_fmri_csg()
 % * 4D nifti files support (via Expand Frames module of SPM) was dropped to
 % allow for parallel computing of multi-sessions with shared structural mri
 % * Reslicing was removed during realignment as this was an unnecessary additional resampling step that can introduce artifacts, for more details see: https://www.nitrc.org/forum/forum.php?thread_id=7155&forum_id=1144
+% * In case of issues, open the generated batch jobs files in the JOBS subfolder to check the parameters and debug
 % -------------------------------------------------------------------------
 % =========================================================================
 clear all;
@@ -51,6 +52,7 @@ clear classes;
 nslices = 0; % set to 0 for autodetect
 TR = 0; % set to 0 for autodetect
 script_mode = 2.5; % 0: use VBM8 + SPM8/DARTEL (slow); 1: use SPM12 with OldSeg only (fast); 2: use SPM12 + CAT12/DARTEL (slowest); 2.5: use SPM12 + CAT12/SHOOT (slowest); 3: use SPM12 with Unified Segmentation (fast).
+    % Note also that if script_mode 2 or 2.5 is selected (CAT12), the LazyProcessing parameter is enabled by default and will ensure that previously preprocessed sMRI will be skipped, even in a previous run. So for example there is an issue during BOLD, no problem, just delete the BOLD data, keep the preprocessed sMRI, and restart the script, it will directly skip to BOLD preprocessing steps.
 motionRemovalTool = 'art'; % do not modify (except if you want to skip art motion correction)
 root_pth = 'X:\Path\To\Data'; % root path, where all the subjects data is
 path_to_spm = 'C:\matlab_tools\spm12'; % change here if you use SPM8 + VBM8 pipeline
@@ -86,6 +88,11 @@ smoothingkernel = 8;
 resizeto3 = false;
 % Parallel preprocessing? Tip: disable when having errors to ease debugging.
 parallel_processing = false;
+% Always disable shared MRI optimization?
+% Global flag controlling whether shared MRI can be reused in the same job. When enabled, if a structural MRI is shared between sessions or modalities, all functional filesets will be processed in one job. This saves time, but coregistration is done on a mean of ALL sessions/modalities, so it may be worse. If false, then a new batch job will be created for each session and modality, regardless of whether the sMRI can be shared (if script_mode == 2 or 2.5, then once the sMRI is preprocessed once, it will be reused for other sessions/modalities without reprocessing, but for other script_mode, the sMRI will be reprocessed again). This needs to be enabled for parallel_processing to be enabled, otherwise parallel_processing will be disabled automatically.
+% If true, it is assumed that all sessions and modalities sharing the same sMRI will also have the same parameters (same TR, nslices, slices order)
+% If either your sessions/modalities have different parameters, or if you want to have a mean coregistration for each session/modality, then set this to false, and ensure to set script_mode to 2 or 2.5 if you still want to skip sMRI preprocessing when already done (via CAT12 LazyProcessing).
+sharedmri_all = true;
 % ART input files
 art_before_smoothing = true; % At CSG, we always did ART on post-smoothed data, but according to Alfonso Nieto-Castanon, ART should be done before smoothing: https://www.nitrc.org/forum/message.php?msg_id=10652
 % Skip preprocessing steps (to do only post-processing?) - useful in case
@@ -242,12 +249,13 @@ fprintf(1, '\n\n-----------------\n=== PREPARING PREPROCESSING JOBS ===\n\n');
 spm_jobman('initcfg'); % init the jobman
 matlabbatchall_counter = 0; % we use this to be able to load multiple different batch files. The steps are in the next sublevel of the batch cell array.
 matlabbatchall = {}; % cell array containing all batch files we will load here, to be able to run them all in a row
-matlabbatchall_infos = {};
+matlabbatchall_infos = {}; % store the infos to print for each batch job (eg, subject name, session, etc.) - this will be printed in the console so the user knows what is happening
 for c = 1:length(conditions) % loop over all conditions/groups
     % Get the data structure for all subjects for this condition
     data = get_data(fullfile(root_pth, conditions{c}), subjects{c}, func_dir_regex);
     for isub = 1:size(data, 2) % loop over all subjects
         prevsdata = [];
+        ffileset = 1; % counter that gets incremented for each file set (= set of functional images) added to the current batch file. This allows to append to the same batch job multiple sessions and modalities. It starts at 1 because the first loop/session/modality does not use it.
         sharedmri_sess = false; % tracks whether we already processed a structural MRI that can be shared across sessions for this subject. It is always false for the first session of any subject, so that this forces to create a de novo batch file, but then if the struct is shared (ie, not inside a session folder but in the subject folder), then the next sessions after the first will reuse the structural (and hence will skip all the very time-consuming segmentation calculations!)
         for isess = 1:length(data(isub).sessions) % loop over all sessions
             fsess = data(isub).sessions{isess};
@@ -255,93 +263,18 @@ for c = 1:length(conditions) % loop over all conditions/groups
             for imodal = 1:length(fsess.modalities) % loop over all modalities
                 fprintf(1, '---- PREPARING CONDITION %s SUBJECT %i (%s) SESSION %s MODALITY %s ----\n', conditions{c}, isub, data(isub).name, data(isub).sessions{isess}.id, fsess.modalities{imodal});
 
-                if sharedmri_sess || sharedmri_mod % if sharedmri_sess or sharedmri_mod, we add the new scans to the previous batch job to include a new session (instead of recreating a new separate job). This is important for parallel processing to avoid 2 jobs processing the structural mri in parallel (else the file will be locked and the processing fail), and in addition it saves 2x the time since we do not have to resegment the structural, which is by far the most time-consuming step.
-                    % This if condition branch gets activated only if there are multiple sessions or modalities reusing the same already preprocessed structural image
-                    % The preprocessing of the structural image is not yet skipped in code but when mode is 2 or 2.5 (using CAT12) then duplicate sMRI preprocessing is skipped thanks to LazyProcessing being enabled.
-                    % Otherwise, for all other modes, the sMRI will be reprocessed again.
-                    % TODO: avoid reprocessing the structural MRI if it is shared across sessions or modalities.
+                % IMPORTANT: explanation how the batch jobs work:
+                % First we load a template batch job, in which we programmatically fill the dynamic field such as volumes paths, and also maybe change some parameters we allow to modify as simply variables at the top of this script for ease for the user (even though they can always open the template batch job to modify any non-dynamic parameter).
+                % (dynamic parameters = parameters that are different for each subject, session, modality, etc., such as path to volumes)
+                % Secondly, if a structural image is shared across sessions or modalities, we reuse the previous batch job to append the functional images of the other sessions/modalities as a new FileSet for the Functional input files to the same job
+                % Reusing the same batch file across sessions/modalities is necessary, because of parallelism: we cannot process the same structural image in different batch jobs in parallel, so we need to make only one batch job per structural image.
+                % Finally, once all sessions/modalities have been added to the job, and all dynamic parameters have been filled, we save the final job as a new batch file for backup for later introspection, and save it in memory in a big cell array matlabbatchall.
+                % Then, after all batch jobs have been created, we can run them all in a row or in parallel using run_jobs()
+                % This approach offers pros and cons:
+                % pros: parallelism, must faster processing since sMRI is by far the most time-consuming step
+                % cons: it is assumed that all sessions and modalities sharing the same sMRI will also have the same parameters (same TR, nslices, slices order), coregistration of all functional filesets to template is a mean for all sessions/modalities. Hence manual preprocessing (reorienting and coregistration) is very important, and bad sessions should be rejected and deleted before this automatic preprocessing pipeline.
 
-                    % == Batch step: Load the anatomical MRI
-                    % Reuse mri if shared across sessions (placed at same level as conditions)
-                    sdata = prevsdata;
-                    if script_mode == 0
-                        matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.cfg_named_file.files = transpose({cellstr(sdata)});
-                    elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
-                        matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(sdata)}';
-                    end
-
-                    % == Batch step: Load functional image
-                    % Add the functional files of this session/modality
-                    fdata = get_fdata(data, isub, isess, imodal);
-                    % Detect if 4D, we need to expand
-                    fdata_nbframes = spm_select_get_nbframes(fdata(1,:));
-                    if fdata_nbframes > 1
-                        %fdata = expand_4d_vols(fdata);  % WRONG: if you do that with a Named File Selector, it will give random results, with not the correct amount of frames (you can check after realign the motion text file rp* and compare against the number of EPI frames). The correct way is to use "Expand images frames" after named file selector
-                        error('4D nifti file detected, they are unsupported. Please convert to 3D nifti files using SPM to avoid memory issues (cant map view error)!');
-                    end
-                    if script_mode == 0
-                        matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.cfg_named_file.files{isess} = cellstr(fdata);
-                    elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
-                        matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.file_dir.file_ops.cfg_named_file.files{isess} = cellstr(fdata);
-                    end
-
-                    % == Batch step: Slice time correction
-                    % add new session into slice timing
-                    % IMPORTANT: make sure all batches have the functional
-                    % named file selector named: "Functional" (and not just
-                    % "Func" nor "functional" for example!), else you might get
-                    % very weird errors (eg, files processed from wrong parent!)
-                    if (script_mode == 2) || (script_mode == 2.5)
-                        slicetimestepidx = 4;
-                    else
-                        slicetimestepidx = 3;
-                    end % endif
-                    if script_mode == 0
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1) = cfg_dep;
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tname = 'Session';
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(1).name = 'class';
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(1).value = 'cfg_files';
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(2).name = 'strtype';
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).tgt_spec{1}(2).value = 'e';
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).sname = sprintf('Named File Selector: Functional(%i) - Files', isess);
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).src_exbranch = substruct('.','val', '{}',{2}, '.','val', '{}',{1});
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1).src_output = substruct('.','files', '{}',{isess});
-                    elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
-                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{isess}(1) = cfg_dep(sprintf('Named File Selector: Functional(%i) - Files', isess), substruct('.','val', '{}',{2}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','files', '{}',{isess}));
-                    end
-
-                    % == Batch step: Realignment
-                    % idem for realignment
-                    if (script_mode == 2) || (script_mode == 2.5)
-                        realignstepidx = 5;
-                    else
-                        realignstepidx = 4;
-                    end % endif
-                    if ~realignunwarp
-                        matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realign.estwrite.data{isess}(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', isess), substruct('.','val', '{}',{slicetimestepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{isess}, '.','files'));
-                    else
-                        matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realignunwarp.data(isess).scans(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', isess), substruct('.','val', '{}',{slicetimestepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{isess}, '.','files'));
-                        matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realignunwarp.data(isess).pmscan = '';
-                    end
-
-                    % == Batch step: Coregistration
-                    % idem for functional images coregistration to structural
-                    if (script_mode == 1) || (script_mode == 3)
-                        coregbaseidx = 5;
-                    elseif (script_mode == 0) || (script_mode == 2) || (script_mode == 2.5)
-                        coregbaseidx = 6;
-                    end
-                    % Note: for realignment, there are 3 choices:
-                    % * use Realign: Estimate & Reslice but only to generate the resliced mean image, on which we realign and coregister T1 (instead of the 1st BOLD image), but then the BOLD images are realigned by modifying the voxel-to-world header infos and not reslicing (no interpolation). So it's very similar to just using Realign: Estimate module, but the difference being that we here realign on mean image instead of first.
-                    % * use Realign & Unwarp
-                    % * use Realign: Estimate & Reslice with all options, reslicing all images. Advantage is that we can use masking, which will zero regions that are too much affected by motion, and they are perfectly realigned to the mean BOLD image. Cons are that we interpolate all BOLD images!
-                    % We chose the first option (but this may change) by default, or third if you enable realignunwarp.
-                    if ~realignunwarp
-                        matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(isess) = cfg_dep(sprintf('Realign: Estimate & Reslice: Realigned Images (Sess %i)', isess), substruct('.','val', '{}',{realignstepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{isess}, '.','cfiles')); % cfiles = realigned images, rfiles = resliced images
-                    else
-                        matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(isess) = cfg_dep(sprintf('Realign & Unwarp: Unwarped Images (Sess %i)', isess), substruct('.','val', '{}',{realignstepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{isess}, '.','uwrfiles')); % uwrfiles = unwarped images
-                    end
-
+                if ~sharedmri_all || ~(sharedmri_sess || sharedmri_mod)   % no already preprocessed shared mri available, we create a new batch/job (either it's the first session or modality, or there is a separate structural MRI for each, depending on where the structural MRI is placed in the folders tree)
 % DROPPED due to too much complex coding and maintenance, the Expand Frames
 % module (and thus 4D nifti) was dropped. If the Expand Frames module could
 % support multiple sessions, it would ease things a lot! (no modules
@@ -392,8 +325,12 @@ for c = 1:length(conditions) % loop over all conditions/groups
 %                     %matlabbatch{6}.spm.spatial.realign.estwrite.data{2}(1).src_output = substruct('type', '()', 'subs', {{isess}})
 %                 end
 
-                else  % no already preprocessed shared mri available, we create a new batch/job (either it's the first session or modality, or there is a separate structural MRI for each, depending on where the structural MRI is placed in the folders tree)
-                    % Autodetection? If not, then load the specified arguments
+                    % = Increment the batches counter, to create a new batch for this job
+                    matlabbatchall_counter = matlabbatchall_counter + 1;
+                    % = Reset the functional MRI fileset counter (since we are detecting a new structural MRI since we are in this branch)
+                    ffileset = 1;
+
+                    % = Autodetection enabled? Then load in local variables the already autodetected parameters. If not, then load the specified arguments
                     if nslices > 0
                         nslices_sess = nslices;
                     else
@@ -410,13 +347,15 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         slice_order_sess = slice_order_auto{c}{isub}{isess}{imodal}.slice_order;
                     end
 
+                    % = Step 1: Load the SPM batch job template
                     % Load (or reload) already designed SPM batch
+                    % We will use that as a template to create a specific batch with all dynamic fields such as volumes paths filled programmatically
                     % maintaining a batch is easier than code (particularly to compare between versions of SPM)
                     mbatch = load(get_template(path_to_batch));  % load into a variable for transparency (necessary for parfor)
-                    matlabbatchall_counter = matlabbatchall_counter + 1;
                     matlabbatchall{matlabbatchall_counter} = mbatch.matlabbatch;
-                    matlabbatchall_infos{matlabbatchall_counter} = sprintf('CONDITION %s SUBJECT %i (%s) SESSION %s MODALITY %s', conditions{c}, isub, data(isub).name, data(isub).sessions{isess}.id, fsess.modalities{imodal});
-                    % Modify the SPM batch to fill in the parameters
+                    matlabbatchall_infos{matlabbatchall_counter} = sprintf('CONDITION %s SUBJECT %i (%s) SESSION %s MODALITY %s', conditions{c}, isub, data(isub).name, data(isub).sessions{isess}.id, fsess.modalities{imodal}); % info that will be printed when the job will run
+
+                    % = Step 2: Modify the SPM batch to fill in the dynamic parameters (dynamic = parameters that change for each subject, session, modality, etc. such as volumes paths)
 
                     % == Batch step: Load the anatomical MRI
                     % Generate the list of mri for this session
@@ -434,6 +373,7 @@ for c = 1:length(conditions) % loop over all conditions/groups
                     end
 
                     % == Batch step: Load functional image
+                    % Add the functional files of this session/modality
                     fdata = get_fdata(data, isub, isess, imodal);
                     % Detect if 4D, we need to expand
                     fdata_nbframes = spm_select_get_nbframes(fdata(1,:));
@@ -448,6 +388,11 @@ for c = 1:length(conditions) % loop over all conditions/groups
                     end
 
                     % == Batch step: Slice time correction
+                    % add new session into slice timing
+                    % IMPORTANT: make sure all batches have the functional
+                    % named file selector named: "Functional" (and not just
+                    % "Func" nor "functional" for example!), else you might get
+                    % very weird errors (eg, files processed from wrong parent!)
                     if (script_mode == 2) || (script_mode == 2.5)
                         slicetimestepidx = 4;
                     else
@@ -570,7 +515,103 @@ for c = 1:length(conditions) % loop over all conditions/groups
                         %end
                     end
 
-                    sharedmri_mod = true; % reuse the structural MRI for the next modalities
+                    % == Reuse the structural MRI for the next modalities in any case
+                    % TODO: support per modality smri, akin to sessions? For now, smri is always shared between modalities.
+                    sharedmri_mod = true;
+
+                else  % There is a shared structural MRI for multiple functional sessions/modalities, we reuse previous batch job but add a new fileset
+                    % If sharedmri_sess or sharedmri_mod, we add this session/modality functional volumes as an additional FileSet that will be processed simultaneously to the previous one, this is why we reuse the previous batch job.
+                    % If there is a shared MRI for multiple sessions or modalities, we reuse the previous batch file by adding this session's/modality's functional files as an additional FileSet
+                    % So that the sMRI will be processed only once, but applied on multiple sessions/modalities at once!
+                    % This if condition branch gets activated only if there are multiple sessions or modalities reusing the same already preprocessed structural image
+                    % This is important for parallel processing to avoid 2 jobs processing the same structural mri in parallel (else the file will be locked and the processing fail), and in addition it saves s x m times the total processing time since we do not have to repreprocess/resegment the structural for each session/modality but only once for all, which is by far the most time-consuming step.
+
+                    % == Increment the fileset counter for each session and each modality, so that we ensure that each fileset gets appended and does not overwrite a previous one
+                    ffileset = ffileset + 1;
+
+                    % == Update the batch info to append the new session/modality
+                    matlabbatchall_infos{matlabbatchall_counter} = sprintf('%s & SESSION %s MODALITY %s', matlabbatchall_infos{matlabbatchall_counter}, data(isub).sessions{isess}.id, fsess.modalities{imodal});
+
+                    % == Batch step: Load the anatomical MRI
+                    % Reuse mri if shared across sessions (placed at same level as conditions)
+                    %sdata = prevsdata;
+                    %if script_mode == 0
+                    %    matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.cfg_named_file.files = transpose({cellstr(sdata)});
+                    %elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
+                    %    matlabbatchall{matlabbatchall_counter}{1}.cfg_basicio.file_dir.file_ops.cfg_named_file.files = {cellstr(sdata)}';
+                    %end
+
+                    % == Batch step: Load functional image
+                    % Add the functional files of this session/modality
+                    fdata = get_fdata(data, isub, isess, imodal);
+                    % Detect if 4D, we need to expand
+                    fdata_nbframes = spm_select_get_nbframes(fdata(1,:));
+                    if fdata_nbframes > 1
+                        %fdata = expand_4d_vols(fdata);  % WRONG: if you do that with a Named File Selector, it will give random results, with not the correct amount of frames (you can check after realign the motion text file rp* and compare against the number of EPI frames). The correct way is to use "Expand images frames" after named file selector, see above the commented block to see how to implement that, but the issue is then that out of memory errors are much more likely, so we prefer to just stick to 3D nifti.
+                        error('4D nifti file detected, they are unsupported, as they can cause out of memory errors (cant map view error). Please convert to 3D nifti files using SPM or the provided helper script nifti_4dto3d_convert_recursive.m .');
+                    end
+                    if script_mode == 0
+                        matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.cfg_named_file.files{ffileset} = cellstr(fdata);
+                    elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
+                        matlabbatchall{matlabbatchall_counter}{2}.cfg_basicio.file_dir.file_ops.cfg_named_file.files{ffileset} = cellstr(fdata);
+                    end
+
+                    % == Batch step: Slice time correction
+                    % add new fileset into slice timing
+                    % IMPORTANT: make sure all batches have the functional
+                    % named file selector named: "Functional" (and not just
+                    % "Func" nor "functional" for example!), else you might get
+                    % very weird errors (eg, files processed from wrong parent!)
+                    if (script_mode == 2) || (script_mode == 2.5)
+                        slicetimestepidx = 4;
+                    else
+                        slicetimestepidx = 3;
+                    end % endif
+                    if script_mode == 0
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1) = cfg_dep;
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1).tname = 'Session';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1).tgt_spec{1}(1).name = 'class';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1).tgt_spec{1}(1).value = 'cfg_files';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1).tgt_spec{1}(2).name = 'strtype';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1).tgt_spec{1}(2).value = 'e';
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1).sname = sprintf('Named File Selector: Functional(%i) - Files', ffileset);
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1).src_exbranch = substruct('.','val', '{}',{2}, '.','val', '{}',{1});
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1).src_output = substruct('.','files', '{}',{ffileset});
+                    elseif (script_mode == 1) || (script_mode == 2) || (script_mode == 2.5) || (script_mode == 3)
+                        matlabbatchall{matlabbatchall_counter}{slicetimestepidx}.spm.temporal.st.scans{ffileset}(1) = cfg_dep(sprintf('Named File Selector: Functional(%i) - Files', ffileset), substruct('.','val', '{}',{2}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','files', '{}',{ffileset}));
+                    end
+
+                    % == Batch step: Realignment (spatial detection of motion) in functional images
+                    % idem for realignment, add new fileset
+                    if (script_mode == 2) || (script_mode == 2.5)
+                        realignstepidx = 5;
+                    else
+                        realignstepidx = 4;
+                    end % endif
+                    if ~realignunwarp
+                        matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realign.estwrite.data{ffileset}(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', ffileset), substruct('.','val', '{}',{slicetimestepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{ffileset}, '.','files'));
+                    else
+                        matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realignunwarp.data(ffileset).scans(1) = cfg_dep(sprintf('Slice Timing: Slice Timing Corr. Images (Sess %i)', ffileset), substruct('.','val', '{}',{slicetimestepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('()',{ffileset}, '.','files'));
+                        matlabbatchall{matlabbatchall_counter}{realignstepidx}.spm.spatial.realignunwarp.data(ffileset).pmscan = '';
+                    end
+
+                    % == Batch step: Coregistration of functional images to structural
+                    % idem, add fileset for functional images coregistration to structural
+                    if (script_mode == 1) || (script_mode == 3)
+                        coregbaseidx = 5;
+                    elseif (script_mode == 0) || (script_mode == 2) || (script_mode == 2.5)
+                        coregbaseidx = 6;
+                    end
+                    % Note: for realignment, there are 3 choices:
+                    % * use Realign: Estimate & Reslice but only to generate the resliced mean image, on which we realign and coregister T1 (instead of the 1st BOLD image), but then the BOLD images are realigned by modifying the voxel-to-world header infos and not reslicing (no interpolation). So it's very similar to just using Realign: Estimate module, but the difference being that we here realign on mean image instead of first.
+                    % * use Realign & Unwarp
+                    % * use Realign: Estimate & Reslice with all options, reslicing all images. Advantage is that we can use masking, which will zero regions that are too much affected by motion, and they are perfectly realigned to the mean BOLD image. Cons are that we interpolate all BOLD images!
+                    % We chose the first option (but this may change) by default, or third if you enable realignunwarp.
+                    if ~realignunwarp
+                        matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(ffileset) = cfg_dep(sprintf('Realign: Estimate & Reslice: Realigned Images (Sess %i)', ffileset), substruct('.','val', '{}',{realignstepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{ffileset}, '.','cfiles')); % cfiles = realigned images, rfiles = resliced images
+                    else
+                        matlabbatchall{matlabbatchall_counter}{coregbaseidx}.spm.spatial.coreg.estimate.other(ffileset) = cfg_dep(sprintf('Realign & Unwarp: Unwarped Images (Sess %i)', ffileset), substruct('.','val', '{}',{realignstepidx}, '.','val', '{}',{1}, '.','val', '{}',{1}), substruct('.','sess', '()',{ffileset}, '.','uwrfiles')); % uwrfiles = unwarped images
+                    end
                 end %end if sharedmri_sess || sharedmri_mod
 
                 % Saving temporary batch (allow to introspect later on in case of issues)
@@ -582,7 +623,7 @@ end % end for conditions
 
 %%%%%%%%%%%%%% RUN PREPROCESSING JOBS
 if ~skip_preprocessing
-    run_jobs(matlabbatchall, parallel_processing, matlabbatchall_infos, path);
+    run_jobs(matlabbatchall, parallel_processing && sharedmri_all, matlabbatchall_infos, path);
 end
 
 %%%%%%%%%%%%%% POST-PROCESSING (smoothing, ART composite motion outliers scrubbing)
