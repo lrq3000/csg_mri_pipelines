@@ -7,6 +7,10 @@ function nifti_4dto3d_convert_recursive(rootpath, spmpath)
 % v1.2.0, 2017-2024, Stephen Larroque, Coma Science Group, University of Liege
 %
 
+% Some messages
+fprintf('4D to 3D nifti recursive converter');
+fprintf('Make sure to delete any __MACOSX hidden folder beforehand, otherwise the script will try to convert fake .nii files and choke.\n');
+
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
 bakpath = path; % backup the current path variable
 restoredefaultpath(); matlabpath(strrep(matlabpath, userpath, '')); % clean up the path
@@ -22,6 +26,7 @@ addpath(currentScriptDir);
 fprintf('Walking recursively through the %s directory to list all nifti files (3D, 4D uncompressed, 4D compressed)...\n', rootpath);
 niftifiles = dirPlus(rootpath, 'PrependPath', true, 'FileFilter', '.*\.(img|nii|nii.gz)$');
 
+% Main loop
 if numel(niftifiles) > 0
     % Test which are 4D nifti files, and memoize the list of 4D nifti files
     fprintf('Found %d nifti files. Now checking which are 4D nifti files...\n', numel(niftifiles));

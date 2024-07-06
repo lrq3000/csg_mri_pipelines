@@ -4,38 +4,62 @@ function nifti_4dto3d_convert_recursive(rootpath, spmpath)
 % WARNING: will delete the 4D nifti files! Make a backup before!
 % Useful to avoid memory errors when processing (the dreaded "cant map view" error) when the nifti is too big.
 % This script needs both SPM (to convert from 4D to 3D) and dirPlus (https://github.com/kpeaton/dirPlus).
-% by Stephen Larroque, 2017, from the Coma Science Group, University of Liege
+% v1.2.0, 2017-2024, Stephen Larroque, Coma Science Group, University of Liege
 %
+
+% Some messages
+fprintf('4D to 3D nifti recursive converter');
+fprintf('Make sure to delete any __MACOSX hidden folder beforehand, otherwise the script will try to convert fake .nii files and choke.\n');
+
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
 bakpath = path; % backup the current path variable
 restoredefaultpath(); matlabpath(strrep(matlabpath, userpath, '')); % clean up the path
 addpath(spmpath); % add the path to SPM
-
-% Some message
-fprintf('Make sure to delete any __MACOSX hidden folder beforehand, otherwise the script will try to convert fake .nii files and choke.\n');
-fprintf('Walking recursively and converting files, please wait...\n');
+% Get the full path of the currently executed script
+currentScriptPath = mfilename('fullpath');
+% Extract the directory containing the script
+[currentScriptDir, ~, ~] = fileparts(currentScriptPath);
+% Add the directory of the currently executed script to the MATLAB path (to be able to call dirPlus)
+addpath(currentScriptDir);
 
 % Get list of all nifti files (recursively, all .img or .nii files)
-niftifiles = dirPlus(rootpath, 'PrependPath', true, 'FileFilter', '.*\.(img|nii)$');
+fprintf('Walking recursively through the %s directory to list all nifti files (3D, 4D uncompressed, 4D compressed)...\n', rootpath);
+niftifiles = dirPlus(rootpath, 'PrependPath', true, 'FileFilter', '.*\.(img|nii|nii.gz)$');
 
 % Main loop
 if numel(niftifiles) > 0
-    % Test which are 4D nifti files
+    % Test which are 4D nifti files, and memoize the list of 4D nifti files
+    fprintf('Found %d nifti files. Now checking which are 4D nifti files...\n', numel(niftifiles));
     idx4d = [];
     for i=1:size(niftifiles, 1)
-        if is4D(niftifiles{i})
+        % If the file is a compressed 4D nifti file, don't try to open it. But if not, we check its content to see if it's an uncompressed 4D nifti file.
+        nfile = niftifiles{i};
+        if strcmpi(nfile(end-6:end), '.nii.gz') || is4D(niftifiles{i})
+            % If the file is a 4D nifti file, add it to the list of 4D nifti files to process afterwards
             idx4d = [idx4d i];
         end
     end %endfor
 
+    % We now have the list of 4D nifti files, process them
+    fprintf('Found %d 4D nifti files to convert to 3D. Now starting to convert...\n', numel(idx4d));
     if numel(idx4d) > 0
-        % Extract only 4D nifti files
+        % Extract only 4D nifti files from the initial list of all the detected nifti files
         nifti4dfiles = niftifiles(idx4d);
 
         % Convert each 4D nifti to 3D nifti
         for i=1:numel(nifti4dfiles)
             % Get one 4D nifti file
             nfile = nifti4dfiles{i};
+            fprintf('Converting 4D nifti file %d/%d: %s\n', i, numel(nifti4dfiles), nfile);
+            % Check if the file is compressed (.nii.gz)
+            if strcmpi(nfile(end-6:end), '.nii.gz')
+                % Uncompress the file
+                uncompressedFile = gunzip(nfile);
+                % Delete compressed file
+                delete(nfile);
+                % Update nfile to point to the uncompressed file for further processing
+                nfile = uncompressedFile{1}; % gunzip returns a cell array
+            end %endif
             % Convert to 3D nifti by using SPM
             spm_file_split(nfile);
             % Delete 4D nifti

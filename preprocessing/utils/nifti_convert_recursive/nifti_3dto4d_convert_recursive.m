@@ -4,16 +4,23 @@ function nifti_3dto4d_convert_recursive(rootpath, spmpath)
 % WARNING: will delete the 3D nifti files! Make a backup before!
 % Useful to avoid memory errors when processing (the dreaded "cant map view" error) when the nifti is too big.
 % This script needs both SPM (to convert from 3D to 4D) and dirPlus (https://github.com/kpeaton/dirPlus).
-% by Stephen Larroque, 2017, from the Coma Science Group, University of Liege
+% by Stephen Larroque, 2017-2024, from the Coma Science Group, University of Liege
 %
+
+% Some messages
+fprintf('3D to 4D (uncompressed) nifti recursive converter');
+fprintf('Make sure to delete any __MACOSX hidden folder beforehand, otherwise the script will try to convert fake .nii files and choke.\n');
+
 % Temporarily restore factory path and set path to SPM and its toolboxes, this avoids conflicts when having different versions of SPM installed on the same machine
 bakpath = path; % backup the current path variable
 restoredefaultpath(); matlabpath(strrep(matlabpath, userpath, '')); % clean up the path
 addpath(spmpath); % add the path to SPM
-
-% Some message
-fprintf('Make sure to delete any __MACOSX hidden folder beforehand, otherwise the script will try to convert fake .nii files and choke.\n');
-fprintf('Walking recursively and converting files, please wait...\n');
+% Get the full path of the currently executed script
+currentScriptPath = mfilename('fullpath');
+% Extract the directory containing the script
+[currentScriptDir, ~, ~] = fileparts(currentScriptPath);
+% Add the directory of the currently executed script to the MATLAB path (to be able to call dirPlus)
+addpath(currentScriptDir);
 
 % Get list of all folders recursively. We will then grab all the niftis at this level to convert to 4D.
 folderslist = dirPlus(rootpath, 'ReturnDirs', true);
