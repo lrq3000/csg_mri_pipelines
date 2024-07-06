@@ -25,8 +25,12 @@ function EA_Act()
 %%choose (then press Enter)
 %%Enjoy!
 %E.A. (Enrico Amico, original author)
+%
+% It is advised to skip_preproc and instead to use the smri or fmri pipelines to preprocess using CAT12 (in addition to auto and manual reorienting and coregistration) before running the current script.
+%
 % Updated on 2017-02-11 and in 2019-01-30 by Stephen Larroque (and on from this date on)
-% v0.2.1
+% Last update: 2024
+% v0.3.0b1
 % NO DISCARD!!!
 %
 % TODO:
@@ -40,13 +44,15 @@ close all;
 AllDir = 'G:\Topreproc\Cosmo2019Tasks\workingFiles_cosmo_task_fMRI\workingFiles'; % input('Type the path of the global folder: ', 's');
 path_to_spm8 = 'C:\matlab_tools\spm8'; %TODO: can update to spm12 by just using OldSeg and OldNorm
 Template = fullfile(path_to_spm8, 'canonical', 'single_subj_T1.nii'); % for the normalization step
-normalize = 1; % normalize the subject's structural MRI before doing the fMRI active task analyses?
+normalize = 1; % normalize the subject's structural MRI before doing the fMRI active task analyses? Note: even if you skip_preproc, you should set this to 1 if you use normalized images, because this parameter changes the regex to find the volumes to include.
 tr = 2.0;
 slice_order = [1:2:42 2:2:42];
 refslice = []; % set to empty to use first reference slice automatically
-skip_preproc = 0; % to skip preprocessing if it is already done and you just want to re-run the statistical test
-hrfTimeDispersionDerivative = [0 0]; % enable time (peak time shift + or - 1s) or time + dispersion derivative (peak time shift and width also) by respectively setting [1 0] or [1 1]. To disable totally use [0 0].
-
+skip_preproc = 1; % to skip preprocessing if it is already done and you just want to re-run the statistical test - it is advised to skip_preproc and instead to use the smri or fmri pipelines to preprocess using CAT12 before running the current script.
+hrfTimeDispersionDerivative = [1 1]; % enable time (peak time shift + or - 1s) or time + dispersion derivative (peak time shift and width also) by respectively setting [1 0] or [1 1]. To disable totally use [0 0].
+% Prefix to find the preprocessed functional images (normalized or not)
+fprefixnorm = 'swr'; % normalized (MNI template space)
+fprefix = 'sr'; % non-normalized (subject space)
 
 % --- Start of main script
 fprintf(1, '\n=== ACTIVE TASK ANALYSIS SINGLE-CASE ===\n');
@@ -119,12 +125,12 @@ for h=3:length(AllGroups)
                         if ~skip_preproc
                             enrico_classical_preprocess_norm(F, S, path_to_spm8, tr, slice_order, refslice);
                         end
-                        SR = spm_select('FPList',funDir,  '^swr.*\.(img|nii)$'); %%%% this is for normalized images
+                        SR = spm_select('FPList',funDir,  '^' fprefixnorm '.*\.(img|nii)$'); %%%% this is for normalized images
                     else
                         if ~skip_preproc
                             enrico_classical_preprocess(F, S, path_to_spm8, tr, slice_order, refslice);
                         end
-                        SR = spm_select('FPList',funDir,  '^sr.*\.(img|nii)$');
+                        SR = spm_select('FPList',funDir,  '^' fprefix '.*\.(img|nii)$');
                     end % endif
 
                     clear matlabbatch;
