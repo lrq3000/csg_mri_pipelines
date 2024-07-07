@@ -30,7 +30,7 @@ function script_preproc_fmri_csg()
 % 2016-2024
 % First version on 2016-04-07, inspired by pipelines from Mohamed Ali Bahri (03/11/2014)
 % Last update 2024
-% v2.5.0
+% v2.5.1
 % License: MIT
 %
 % TODO:
@@ -1126,9 +1126,9 @@ function save_batch(jobsdir, matlabbatch, jobname, script_mode, subjname, isess,
     prevfolder = cd();
     cd(jobsdir);
     if ~exist('isess', 'var')  % saving batch for structural preprocessing (no session nor modality)
-        save(['jobs_' jobname '_mode' int2str(script_mode) '_' subjname '_' datestr(now,30)], 'matlabbatch')
+        save(['jobs_' jobname '_mode' num2str(script_mode) '_' subjname '_' datestr(now,30)], 'matlabbatch')
     else  % saving batch for functional preprocessing (with session and modality)
-        save(['jobs_' jobname '_mode' int2str(script_mode) '_' subjname '_session' int2str(isess) '_modality' int2str(imodal) '_' datestr(now,30)], 'matlabbatch')
+        save(['jobs_' jobname '_mode' num2str(script_mode) '_' subjname '_session' int2str(isess) '_modality' int2str(imodal) '_' datestr(now,30)], 'matlabbatch')
     end
     cd(prevfolder);
 end %endfunction
