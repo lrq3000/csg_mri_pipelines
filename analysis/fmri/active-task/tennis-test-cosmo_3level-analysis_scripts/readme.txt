@@ -3,3 +3,6 @@ For the preprocessing, use the single subject coma meetings package with "normal
 First run the ImCalc_* scripts (which generate the difference between two sessions, usually post-pre), then open spm fmri and Batch and load the exp_* files (which will generate the statistical tests).
 
 NOTE: As of 2024, this approach is deprecated in favor of AFNI LMEr for activity analysis of task-based designs, or gPPI in CONN for connectivity analysis.
+
+Made by Stephen Karl Larroque, 2016-2024
+
