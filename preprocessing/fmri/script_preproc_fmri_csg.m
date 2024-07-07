@@ -22,7 +22,7 @@ function script_preproc_fmri_csg()
 %
 % You need to have installed the following libraries prior to launching this script:
 % * ART
-% * SPM8 (r6313) + VBM8 (r445, inside spm/toolbox folder) OR SPM12 native (r7487, for OldSeg or Unified Segmentation pipelines) OR SPM12 (r7487) + CAT12 (r1434, inside spm/toolbox folder)
+% * SPM8 (r6313) + VBM8 (r445, inside spm/toolbox folder) OR SPM12 native (Version 7771 13-Jan-20 as shown in Contents.m, for OldSeg or Unified Segmentation pipelines) OR SPM12 (Version 7771 13-Jan-20 as shown in Contents.m) + CAT12 (Version 2577 (CAT12.9) 2024-05-03 as shown in CAT12/Contents.m, and CAT12 must be placed inside spm/toolbox folder)
 % * (optional) RSHRF toolbox if you want to deconvolve the haemodynamic response function (set enable_rshrf to true)
 % Note: old versions of CAT12 can be downloaded at: http://www.neuro.uni-jena.de/cat12/
 %

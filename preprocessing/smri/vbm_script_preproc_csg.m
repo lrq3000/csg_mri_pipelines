@@ -33,6 +33,7 @@ function vbm_script_preproc_csg()
 %
 % TODO:
 % * Parallelize smoothing and 2nd-level results generation?
+% * Update to use the latest CAT12, similarly to fmri/script_preproc_csg.m ?
 % -------------------------------------------------------------------------
 % =========================================================================
 clear all;
