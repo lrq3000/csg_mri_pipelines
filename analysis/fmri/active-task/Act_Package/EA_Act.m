@@ -30,7 +30,7 @@ function EA_Act()
 %
 % Updated on 2017-02-11 and in 2019-01-30 by Stephen Larroque (and on from this date on)
 % Last update: 2024
-% v0.3.0b1
+% v0.3.0
 % NO DISCARD!!!
 %
 % TODO:
@@ -41,8 +41,8 @@ clear all;
 close all;
 % clc;
 %discard=3;
-AllDir = 'G:\Topreproc\Cosmo2019Tasks\workingFiles_cosmo_task_fMRI\workingFiles'; % input('Type the path of the global folder: ', 's');
-path_to_spm8 = 'C:\matlab_tools\spm8'; %TODO: can update to spm12 by just using OldSeg and OldNorm
+AllDir = 'X:\path\to\volumes'; % input('Type the path of the global folder: ', 's');
+path_to_spm8 = 'C:\matlab_tools\spm12'; %TODO: can update to spm12 by just using OldSeg and OldNorm - but for statistical analyses (if skip_preproc = 1) this already works with spm12
 Template = fullfile(path_to_spm8, 'canonical', 'single_subj_T1.nii'); % for the normalization step
 normalize = 1; % normalize the subject's structural MRI before doing the fMRI active task analyses? Note: even if you skip_preproc, you should set this to 1 if you use normalized images, because this parameter changes the regex to find the volumes to include.
 tr = 2.0;
@@ -51,8 +51,8 @@ refslice = []; % set to empty to use first reference slice automatically
 skip_preproc = 1; % to skip preprocessing if it is already done and you just want to re-run the statistical test - it is advised to skip_preproc and instead to use the smri or fmri pipelines to preprocess using CAT12 before running the current script.
 hrfTimeDispersionDerivative = [1 1]; % enable time (peak time shift + or - 1s) or time + dispersion derivative (peak time shift and width also) by respectively setting [1 0] or [1 1]. To disable totally use [0 0].
 % Prefix to find the preprocessed functional images (normalized or not)
-fprefixnorm = 'swr'; % normalized (MNI template space)
-fprefix = 'sr'; % non-normalized (subject space)
+fprefixnorm = 's8wa'; % normalized (MNI template space)
+fprefix = 's8a'; % non-normalized (subject space)
 
 % --- Start of main script
 fprintf(1, '\n=== ACTIVE TASK ANALYSIS SINGLE-CASE ===\n');
@@ -121,24 +121,30 @@ for h=3:length(AllGroups)
 
                     % Select functional images
                     funDir = FunDir{act};
-                    if normalize
+                    if normalize % with normalization (we convert to template's space)
+                        % Preprocess
                         if ~skip_preproc
                             enrico_classical_preprocess_norm(F, S, path_to_spm8, tr, slice_order, refslice);
                         end
-                        SR = spm_select('FPList',funDir,  '^' fprefixnorm '.*\.(img|nii)$'); %%%% this is for normalized images
-                    else
+                        % Select the resulting preprocessed functional images
+                        SR = spm_select('FPList',funDir,  ['^' fprefixnorm '.*\.(img|nii)$']); %%%% this is for normalized images
+                    else % without normalization (we stay in subject's space)
+                        % Preprocess
                         if ~skip_preproc
                             enrico_classical_preprocess(F, S, path_to_spm8, tr, slice_order, refslice);
                         end
-                        SR = spm_select('FPList',funDir,  '^' fprefix '.*\.(img|nii)$');
+                        % Select the resulting preprocessed functional images
+                        SR = spm_select('FPList',funDir,  ['^' fprefix '.*\.(img|nii)$']);
                     end % endif
 
                     clear matlabbatch;
 
+                    % ART motion regression
                     %                F_Images = spm_select('FPList', Art_Dir, '^f.*\.(img|nii)$');
                      %F_Images(1:discard,:)=[];
                      %R_Images = spm_select('FPList', Art_Dir, '^r.*\.(img|nii)$');
 
+                    % Prepare the active task paradigm block design
                     if (FlagOnset==1)
                         %Onset = [(15-discard):30:(length(F)-30)]; 
                         Onset = [15 45 75 105 135];
@@ -146,6 +152,8 @@ for h=3:length(AllGroups)
                     elseif(FlagOnset==2)
                         Onset = [5 21 37 53 85]; %%% Paradigma Actigait
                     end % endif
+
+                    % Create and run the active task job
                     funDir = FunDir{act};
                     %funDir = funDir{1};
                     activation_name=name_act;
@@ -153,6 +161,7 @@ for h=3:length(AllGroups)
                     %clearvars -except count discard AllDir AllSubjects FunDir SubFolders;
                     clear matlabbatch;
                     close all;
+
                 end %enfor
                 clear FunDir;
             end %endif
