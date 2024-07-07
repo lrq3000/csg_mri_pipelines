@@ -63,7 +63,7 @@ addpath(path_to_spm8); % add the path to SPM8
 
 %prompt = ('\n Number of first functional volumes to discard : \n'); 
 %discard = input(prompt);
-prompt2 = ('Which onset do you want? Type 1 for MiracleCase, 2 for Actigait Onset: \n');  %%% Miracle Case: 165 volumes
+prompt2 = ('Which onset do you want? Type 1 for MiracleCase (aka tennis test and navigation test), 2 for Actigait Onset: \n');  %%% Miracle Case: 165 volumes
 FlagOnset = input(prompt2);
 % For each group
 AllGroups = dir(AllDir);
