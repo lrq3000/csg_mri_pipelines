@@ -2,7 +2,7 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4885120.svg)](https://doi.org/10.5281/zenodo.4885120)
 
-Magnetic Resonance Imagery (MRI) preprocessing and analysis pipelines and tools for the study of disorders of consciousness.
+Magnetic Resonance Imagery (MRI) standardized preprocessing and analysis pipelines and tools for the study of disorders of consciousness.
 
 ## Description
 
@@ -15,6 +15,8 @@ This repository contains open-sourced MRI pipelines for:
 SPM8 and VBM8 are also supported for structural and functional MRI analyses for retrocompatibility and reproducibility purposes.
 
 In combination with the [Coma Science Group's open-sourced MRI protocol](https://github.com/lrq3000/mri_protocol), this allows for the implementation of clinical and research MRI pipelines from A to Z, from image acquisition to publishable results.
+
+The pipelines are made to be standardized, with options that can be turned on or off to cover most needs, without requiring any code modification. Usually, there is no need to change the defaults at all for most studies.
 
 All tools are either in MATLAB or Python.
 
